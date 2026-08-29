@@ -263,12 +263,33 @@ export const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
   hidden: 'مخفي',
 };
 
-export const PAYMENT_METHODS = ['cod'] as const;
+export const PAYMENT_METHODS = ['cod', 'mobicash', 'edfali'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cod: 'الدفع عند الاستلام',
+  mobicash: 'موبي كاش',
+  edfali: 'أدفعلي',
 };
+
+export const PAYMENT_METHOD_HINTS: Record<PaymentMethod, string> = {
+  cod: 'تدفع للمندوب نقدًا عند استلام طلبك.',
+  mobicash: 'تدفع من محفظة موبي كاش على هاتفك.',
+  edfali: 'تدفع من حساب أدفعلي على هاتفك.',
+};
+
+/**
+ * الطرق التي تُحصَّل إلكترونيًا قبل التسليم.
+ *
+ * ⚠️ الفرق ليس تسمية: طلب «الدفع عند الاستلام» يُنشأ مدفوعًا ضمنًا ويُسلَّم،
+ * أما طلب إلكتروني فيبقى `paymentStatus = pending` حتى يصل تأكيد المصرف.
+ * خلطهما يعني تسليم بضاعة لم يصل ثمنها.
+ */
+export const ONLINE_PAYMENT_METHODS = ['mobicash', 'edfali'] as const;
+
+export function isOnlinePayment(method: string): boolean {
+  return (ONLINE_PAYMENT_METHODS as readonly string[]).includes(method);
+}
 
 export const PRODUCT_SORTS = [
   'featured',

@@ -16,7 +16,11 @@ import { useCart } from '@/stores/cart';
 import { toast } from '@/stores/toast';
 import { track } from '@/components/analytics/Tracker';
 import { formatMoney } from '@/lib/money';
-import { PAYMENT_METHOD_LABELS } from '@/lib/constants';
+import {
+  PAYMENT_METHOD_LABELS,
+  PAYMENT_METHOD_HINTS,
+  type PaymentMethod,
+} from '@/lib/constants';
 import type { CartItem, CartIssue } from '@/lib/services/cart';
 import type { CityOption } from '@/lib/services/delivery';
 import { EmptyState, Skeleton } from '@/components/ui/primitives';
@@ -53,7 +57,13 @@ type FieldErrors = Partial<
  * لا يحسب شيئًا ولا يرسل أي سعر — يرسل معرّفات وكميات وبيانات تواصل فقط.
  * عند التأكيد يعيد الخادم الحساب مرة أخرى قبل الحفظ.
  */
-export function CheckoutForm({ cities }: { cities: CityOption[] }) {
+export function CheckoutForm({
+  cities,
+  paymentMethods,
+}: {
+  cities: CityOption[];
+  paymentMethods: PaymentMethod[];
+}) {
   const router = useRouter();
   const lines = useCart((state) => state.lines);
   const hydrated = useCart((state) => state.hydrated);
@@ -68,6 +78,10 @@ export function CheckoutForm({ cities }: { cities: CityOption[] }) {
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState('');
   const [honeypot, setHoneypot] = useState('');
+  // الخيار الأول هو الافتراضي، والخادم يتحقق من المُرسَل على أي حال
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
+    paymentMethods[0] ?? 'cod',
+  );
 
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoteFailed, setQuoteFailed] = useState(false);
@@ -194,6 +208,7 @@ export function CheckoutForm({ cities }: { cities: CityOption[] }) {
           notes: notes || null,
           couponCode: appliedCoupon || null,
           website: honeypot,
+          paymentMethod,
         }),
       });
 
@@ -436,23 +451,35 @@ export function CheckoutForm({ cities }: { cities: CityOption[] }) {
               طريقة الدفع
             </h2>
 
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--accent)] bg-[var(--accent)]/8 p-4">
-              <input
-                type="radio"
-                name="payment"
-                value="cod"
-                defaultChecked
-                className="mt-0.5 accent-[var(--accent)]"
-              />
-              <span>
-                <span className="block text-sm font-semibold">
-                  {PAYMENT_METHOD_LABELS.cod}
-                </span>
-                <span className="mt-1 block text-xs text-[var(--text-secondary)]">
-                  تدفع للمندوب نقدًا عند استلام طلبك.
-                </span>
-              </span>
-            </label>
+            {/*
+              الطرق تأتي من الخادم لا من الشيفرة: طريقة بلا بيانات تاجر
+              خلفها لا تصل إلى هنا أصلًا. انظر `lib/payments.ts`.
+            */}
+            <div className="space-y-3">
+              {paymentMethods.map((method, index) => (
+                <label
+                  key={method}
+                  className="flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--accent)] bg-[var(--accent)]/8 p-4"
+                >
+                  <input
+                    type="radio"
+                    name="payment"
+                    value={method}
+                    defaultChecked={index === 0}
+                    onChange={() => setPaymentMethod(method)}
+                    className="mt-0.5 accent-[var(--accent)]"
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold">
+                      {PAYMENT_METHOD_LABELS[method]}
+                    </span>
+                    <span className="mt-1 block text-xs text-[var(--text-secondary)]">
+                      {PAYMENT_METHOD_HINTS[method]}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
           </section>
         </div>
 

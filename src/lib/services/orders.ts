@@ -35,6 +35,8 @@ export type CreateOrderInput = {
   addressLine: string;
   notes?: string | null;
   couponCode?: string | null;
+  /** يصل مُتحقَّقًا منه من نقطة النهاية — انظر `isPaymentMethodEnabled` */
+  paymentMethod?: string | null;
   deviceType?: string | null;
   referrer?: string | null;
   ip?: string | null;
@@ -134,6 +136,9 @@ export async function createOrder(
     };
   }
 
+  // الافتراض الآمن عند الغياب: الدفع عند الاستلام
+  const paymentMethod = input.paymentMethod || 'cod';
+
   const customerName = input.customerName.trim().slice(0, 120);
   const addressLine = input.addressLine.trim().slice(0, 500);
   const notes = input.notes?.trim().slice(0, 1000) || null;
@@ -207,6 +212,14 @@ export async function createOrder(
           areaName: totals.delivery!.areaName,
           addressLine,
           notes,
+
+          /**
+           * ⚠️ `paymentStatus` يبقى `pending` للطرق الإلكترونية حتى يصل
+           * تأكيد المصرف. تعليمه `paid` عند الإنشاء يعني تسليم بضاعة قد
+           * لا يكون ثمنها وصل — والخطأ لا يظهر إلا في الجرد.
+           */
+          paymentMethod: paymentMethod,
+          paymentStatus: 'pending',
 
           subtotal: totals.subtotal,
           discountTotal: totals.discountTotal,

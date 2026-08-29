@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { getDeliveryOptions } from '@/lib/services/delivery';
+import { enabledPaymentMethods } from '@/lib/payments';
 import { CheckoutForm } from './CheckoutForm';
 import { EmptyState } from '@/components/ui/primitives';
 import { MapPinOff } from 'lucide-react';
@@ -33,7 +34,7 @@ export default async function CheckoutPage() {
           action={{ href: '/cart', label: 'العودة إلى السلة' }}
         />
       ) : (
-        <CheckoutForm cities={cities} />
+        <CheckoutForm cities={cities} paymentMethods={enabledPaymentMethods()} />
       )}
     </main>
   );

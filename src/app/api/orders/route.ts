@@ -7,6 +7,7 @@ import { normalizePhone } from '@/lib/utils';
 import { invalidateProduct } from '@/lib/cache';
 import { logError } from '@/lib/logger';
 import { MAX_CART_LINES } from '@/lib/constants';
+import { isPaymentMethodEnabled } from '@/lib/payments';
 
 /**
  * إنشاء طلب.
@@ -58,6 +59,17 @@ const OrderSchema = z.object({
   notes: z.string().trim().max(1000).nullish(),
   couponCode: z.string().trim().max(40).nullish(),
 
+  /**
+   * طريقة الدفع.
+   *
+   * ⚠️ تُقبل كنصّ هنا ثم تُفحص بـ `isPaymentMethodEnabled` أدناه، لا
+   * بقائمة ثابتة في المخطّط. الفرق جوهري: المخطّط يعرف الأسماء التي
+   * يفهمها المتجر، والحارس وحده يعرف أيّها موصول فعلًا ببيانات تاجر.
+   * ولولا الفحص لأمكن لأي زبون أن يرسل `mobicash` ويُنشئ طلبًا «إلكترونيًا»
+   * لا سبيل إلى تحصيله.
+   */
+  paymentMethod: z.string().trim().max(32).optional(),
+
   /** حقل فخّ: يملؤه الآليّ ولا يراه الإنسان */
   website: z.string().max(0).optional(),
 });
@@ -98,9 +110,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, orderNumber: 'MON-0' });
     }
 
+    /**
+     * الطريقة المطلوبة تُقبل فقط إن كانت مفعّلة على الخادم في هذه اللحظة.
+     * وأي شيء آخر — اسم مجهول، أو طريقة عُطّلت بعد فتح الصفحة — يعود إلى
+     * الدفع عند الاستلام بدل أن يُرفض الطلب: الزبون أتمّ شراءه ولا ذنب له
+     * في إعداد تغيّر، وتحويله إلى الدفع عند الاستلام آمن دائمًا.
+     */
+    const requested = parsed.data.paymentMethod ?? 'cod';
+    const paymentMethod = isPaymentMethodEnabled(requested) ? requested : 'cod';
+
     const userAgent = request.headers.get('user-agent');
 
     const result = await createOrder({
+      paymentMethod,
       lines: sanitizeLines(parsed.data.lines),
       customerName: parsed.data.customerName,
       customerPhone: parsed.data.customerPhone,
