@@ -25,3 +25,6 @@ tsconfig.tsbuildinfo
 # نسخة البيانات المنقولة — تحوي تجزئة كلمة مرور المدير وبيانات العملاء
 /data-export.json
 /setup-log.txt
+
+# ربط المجلد بموقع Netlify — خاص بهذا الجهاز
+.netlify/

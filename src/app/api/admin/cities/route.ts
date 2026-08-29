@@ -175,7 +175,12 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
-export async function handleAdminError(error: unknown, path: string) {
+/**
+ * ⚠️ بلا `export`. ملفات `route.ts` لا تُصدّر إلا أسماء المسارات
+ * (GET/POST/…) وإعداداتها؛ وأي تصدير آخر يوقف البناء بـ TS2344 يذكر
+ * «incompatible with index signature» — وهي رسالة لا تدلّ على سببها.
+ */
+async function handleAdminError(error: unknown, path: string) {
   if (error instanceof UnauthorizedError) {
     return NextResponse.json({ error: 'انتهت الجلسة' }, { status: 401 });
   }

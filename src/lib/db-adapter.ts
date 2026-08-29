@@ -14,8 +14,26 @@ import { PrismaPg } from '@prisma/adapter-pg';
  * `provider` في `schema.prisma` يبقى تعديلًا يدويًا واحدًا: Prisma يقرأه
  * وقت توليد الأنواع وبناء الـ migrations، فلا يقبل قيمة من البيئة.
  */
+/**
+ * سقف اتصالات المسبح الواحد.
+ *
+ * ⚠️ `connection_limit=1` المكتوب في `DATABASE_URL` **لا أثر له هنا**: إنه
+ * وسيط محرّك Prisma القديم، أما محوّل `pg` فيقرأ إعداداته من الكائن ولا
+ * يلتفت إلى الرابط. وافتراضي `pg` عشرة اتصالات لكل مسبح.
+ *
+ * وSession pooler على خطة Supabase المجانية يقبل ١٥ اتصالًا للمشروع كله،
+ * فمسبحان اثنان يكفيان لبلوغ السقف:
+ *   `(EMAXCONNSESSION) max clients reached in session mode`
+ *
+ * ثلاثة تكفي المتجر بسعة: الطلبات تتوالى ولا تتزاحم على متجر بهذا الحجم،
+ * ويبقى متّسع لبناء يجري بالتوازي مع تصفّح زبون.
+ */
+const POOL_MAX = 3;
+
 export function createDatabaseAdapter(url: string) {
-  if (isPostgres(url)) return new PrismaPg({ connectionString: url });
+  if (isPostgres(url)) {
+    return new PrismaPg({ connectionString: url, max: POOL_MAX });
+  }
 
   if (url.startsWith('file:')) return new PrismaBetterSqlite3({ url });
 

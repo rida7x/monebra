@@ -10,7 +10,7 @@ import {
 import { ProductGrid } from '@/components/product/ProductCard';
 import { ProductFilters } from '@/components/product/ProductFilters';
 import { Pagination } from '@/components/product/Pagination';
-import { EmptyState, ProductGridSkeleton } from '@/components/ui/primitives';
+import { EmptyState } from '@/components/ui/primitives';
 
 export const revalidate = 120;
 
@@ -99,14 +99,6 @@ export default async function ProductsPage({ searchParams }: PageProps) {
           )}
         </div>
       </div>
-    </main>
-  );
-}
-
-export function Loading() {
-  return (
-    <main className="container-page py-10">
-      <ProductGridSkeleton count={8} />
     </main>
   );
 }

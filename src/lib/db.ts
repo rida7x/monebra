@@ -41,6 +41,15 @@ const globalForPrisma = globalThis as unknown as {
 export const prisma: PrismaClientSingleton =
   globalForPrisma.prisma ?? createPrismaClient();
 
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
+/**
+ * ⚠️ التخزين يجري في **كل** الأوضاع، لا في التطوير وحده.
+ *
+ * `next build` يعمل بـ `NODE_ENV=production`، ويولّد الصفحات بسجلّ وحدات
+ * مستقل لكل مسار. فاشتراط «غير الإنتاج» كان يعني عميل Prisma جديدًا —
+ * ومسبح اتصالات جديدًا — لكل صفحة تُولَّد، حتى يتجاوز مجموعها حدّ Supabase
+ * فيفشل النشر بـ `EMAXCONNSESSION` عند صفحة عشوائية تختلف كل مرة.
+ *
+ * وفي الإنتاج على Netlify `globalThis` يخصّ نسخة الدالة وحدها، فالتخزين
+ * فيه يعيد استعمال المسبح بين الطلبات بدل فتح واحد لكل طلب — وهو المطلوب.
+ */
+globalForPrisma.prisma = prisma;

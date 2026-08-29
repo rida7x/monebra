@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && next build && tsx scripts/flatten-junctions.ts",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -22,7 +22,8 @@
     "brand": "tsx scripts/build-brand.ts",
     "db:export": "tsx scripts/db-transfer.ts export",
     "db:import": "tsx scripts/db-transfer.ts import",
-    "setup:supabase": "tsx scripts/setup-supabase.ts"
+    "setup:supabase": "tsx scripts/setup-supabase.ts",
+    "deploy": "tsx scripts/deploy-netlify.ts"
   },
   "dependencies": {
     "@netlify/blobs": "^11.0.2",

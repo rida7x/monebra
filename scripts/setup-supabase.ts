@@ -1,8 +1,10 @@
 import 'dotenv/config';
 import { execSync } from 'node:child_process';
 import { readFile, writeFile, rm } from 'node:fs/promises';
-import { stdin, stdout } from 'node:process';
+import { stdout } from 'node:process';
 import { Client } from 'pg';
+
+import { ask, askSecret } from './lib/prompt.js';
 
 /**
  * ينقل المتجر من SQLite المحلية إلى Supabase — بأمر واحد.
@@ -33,11 +35,6 @@ const REGIONS = [
 const PREFIXES = ['aws-0', 'aws-1'];
 const PORT = 5432;
 
-/** مفاتيح تحكّم — بالرمز لا بالحرف، كي لا تفسد عند نسخ الملف أو تحريره */
-const CTRL_C = String.fromCharCode(3);
-const CTRL_D = String.fromCharCode(4);
-const BACKSPACE = String.fromCharCode(127);
-
 /**
  * سجلّ نصّي لكل ما يجري.
  *
@@ -46,6 +43,14 @@ const BACKSPACE = String.fromCharCode(127);
  * الفشل بدل التخمين. تُنزع منه ألوان الطرفية وكلمة المرور.
  */
 const LOG = 'setup-log.txt';
+
+/**
+ * نسخة الجداول التي ليست من المتجر، تُكتب قبل حذفها من Supabase.
+ *
+ * على سطح المكتب لا داخل مجلد المشروع: صاحب المتجر يفتح سطح مكتبه ولا يفتح
+ * مجلدات الكود، وملف إنقاذ لا يجده صاحبه كأنه غير موجود.
+ */
+const STRANGERS_BACKUP = '../جداول-محفوظة-من-سوبابيس.json';
 const logLines: string[] = [`سجل التشغيل — ${new Date().toISOString()}`];
 let secretToMask = '';
 
@@ -69,93 +74,6 @@ function step(n: number, title: string) {
   console.log(`\n\x1b[1;33m[${n}/6] ${title}\x1b[0m`);
   record(line);
 }
-
-/**
- * قارئ واحد لكل الأسئلة — بإظهار أو بإخفاء.
- *
- * ⚠️ لماذا لا نستخدم `readline`: إنشاء واجهتين متتاليتين على نفس `stdin`
- * يجعل الأولى تبتلع سطر الثانية، فتُقرأ كلمة المرور فارغة أو يتجمّد الطلب.
- * مصدر قراءة واحد يزيل هذه الفئة من الأخطاء كلها.
- *
- * وخارج الطرفية التفاعلية نقرأ من التدفّق مباشرة بدل التعليق في انتظار وضع
- * خام لا وجود له.
- */
-function askLine(prompt: string, mask = false): Promise<string> {
-  stdout.write(prompt);
-
-  if (!stdin.isTTY) {
-    return new Promise((resolve) => {
-      let buffer = '';
-      stdin.setEncoding('utf8');
-
-      const onData = (chunk: string) => {
-        buffer += chunk;
-        const end = buffer.indexOf('\n');
-        if (end < 0) return;
-
-        stdin.removeListener('data', onData);
-        stdin.pause();
-        // ما بعد السطر يعود إلى التدفّق ليقرأه السؤال التالي
-        stdin.unshift(buffer.slice(end + 1));
-        resolve(buffer.slice(0, end).replace(/\r$/, '').trim());
-      };
-
-      stdin.on('data', onData);
-      stdin.resume();
-    });
-  }
-
-  return new Promise((resolve, reject) => {
-    let value = '';
-    stdin.setEncoding('utf8');
-    stdin.setRawMode(true);
-    stdin.resume();
-
-    const finish = (action: () => void) => {
-      stdin.removeListener('data', onData);
-      stdin.setRawMode(false);
-      stdin.pause();
-      stdout.write('\n');
-      action();
-    };
-
-    const onData = (chunk: string) => {
-      for (const char of chunk) {
-        if (char === '\n' || char === '\r' || char === CTRL_D) {
-          return finish(() => resolve(value.trim()));
-        }
-
-        if (char === CTRL_C) {
-          return finish(() => reject(new Error('أُلغي.')));
-        }
-
-        if (char === BACKSPACE || char === '\b') {
-          if (value.length > 0) {
-            value = value.slice(0, -1);
-            stdout.write('\b \b');
-          }
-          continue;
-        }
-
-        // تجاهل مفاتيح التحكم والأسهم
-        if (char >= ' ') {
-          value += char;
-          // النجمة تُظهر أن الكتابة تصل فعلًا. الإخفاء التام يترك المستخدم
-          // لا يدري أطُبع حرفه أم لا، فيكرّر أو يمسح بلا داعٍ.
-          stdout.write(mask ? '*' : char);
-        }
-      }
-    };
-
-    stdin.on('data', onData);
-  });
-}
-
-async function ask(prompt: string, fallback = ''): Promise<string> {
-  return (await askLine(prompt)) || fallback;
-}
-
-const askSecret = (prompt: string) => askLine(prompt, true);
 
 /**
  * نتيجة محاولة الاتصال بمضيف واحد.
@@ -395,22 +313,62 @@ async function main() {
   }
 
   if (strangers.length > 0) {
+    /**
+     * ⚠️ السؤال وحده كان يوقف الإعداد. «أحذف جداول لا أعرفها؟» سؤال لا يملك
+     * غير المبرمج جوابًا آمنًا له، فيردّ «لا» ويقف كل شيء — وهذا ما حدث فعلًا
+     * مع جدول `backups`. فننسخ محتواها إلى ملف على جهازه **قبل** أن نسأل:
+     * عندها يصير الجواب بلا خسارة ممكنة، والسؤال إخبارًا لا امتحانًا.
+     */
     say('');
     say('  ⚠ في قاعدتك جداول ليست من المتجر:');
     for (const s of strangers) {
       say(`     • ${s.table} — ${s.rows} صفًا`);
     }
+
     say('');
-    say('  بناء جداول المتجر يحذفها. إن كنت لا تعرف ما هي فالغالب أنها');
-    say('  بقايا تجربة على Supabase ولا قيمة لها.');
+    say('  ننسخ محتواها إلى ملف على جهازك أولًا...');
+
+    const keeper = new Client({
+      connectionString: url,
+      ssl: { rejectUnauthorized: false },
+    });
+
+    const saved: Record<string, unknown[]> = {};
+
+    await keeper.connect();
+    try {
+      for (const { table } of strangers) {
+        const { rows } = await keeper.query(
+          `select * from "${table.replace(/"/g, '""')}"`,
+        );
+        saved[table] = rows;
+      }
+    } finally {
+      await keeper.end();
+    }
+
+    // ⚠️ BigInt لا يُسلسَل إلى JSON وأعمدة bigint شائعة في جداول التجارب،
+    // فبلا هذا المحوّل تنكسر النسخة الاحتياطية على الجدول الذي جئنا ننقذه.
+    const dump = JSON.stringify(
+      { savedAt: new Date().toISOString(), project: ref, tables: saved },
+      (_key, value) => (typeof value === 'bigint' ? value.toString() : value),
+      2,
+    );
+
+    await writeFile(STRANGERS_BACKUP, dump, 'utf8');
+    say(`  ✓ نسخة محفوظة: ${STRANGERS_BACKUP}`);
+
+    say('');
+    say('  بناء جداول المتجر يحذفها من Supabase — لكن النسخة أعلاه تبقى');
+    say('  عندك. إن تبيّن لاحقًا أنك تحتاجها، الملف فيه كل صفوفها.');
     say('');
 
-    const answer = await ask('  أحذفها وأكمل؟ اكتب «نعم» ثم Enter: ');
+    const answer = await ask('  نكمل؟ [نعم]: ', 'نعم');
 
     if (answer !== 'نعم' && answer.toLowerCase() !== 'yes') {
       throw new Error(
         'أُلغي بناءً على طلبك — لم يُحذف شيء.\n' +
-          '  إن كانت تلك الجداول مهمة، انسخ محتواها من لوحة Supabase أولًا.',
+          `  نسخة الجداول محفوظة على أي حال: ${STRANGERS_BACKUP}`,
       );
     }
   }
