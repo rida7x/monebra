@@ -7,6 +7,7 @@ import { invalidateProduct, invalidateCategories } from '@/lib/cache';
 import { toMinor } from '@/lib/money';
 import { GENDERS, SEASONS, OCCASIONS, TIME_OF_DAY, NOTE_TYPES } from '@/lib/constants';
 import { logError } from '@/lib/logger';
+import { uploadedFileName } from '@/lib/storage';
 
 /**
  * حفظ منتج (إنشاء أو تعديل).
@@ -105,8 +106,16 @@ export async function POST(request: NextRequest) {
 
     const data = parsed.data;
 
-    // كل الصور يجب أن تكون من مجلد الرفع — يمنع حقن روابط خارجية
-    const badImage = data.images.find((url) => !url.startsWith('/uploads/'));
+    /**
+     * كل الصور يجب أن تكون مما رفعناه نحن — يمنع حقن روابط خارجية.
+     *
+     * ⚠️ بـ `uploadedFileName` لا بـ `startsWith('/uploads/')`. البادئة
+     * تختلف باختلاف المزوّد: `/uploads/` محليًا و`/api/images/` على مخزن
+     * Netlify. وفحص البادئة الأولى وحدها كان يرفض **كل** صورة تُرفع على
+     * الموقع المنشور برسالة «رابط صورة غير صالح» — بعد أن نجح رفعها فعلًا.
+     * والحارس المشترك أدقّ أيضًا: يتحقق من نمط الاسم لا من البادئة فقط.
+     */
+    const badImage = data.images.find((url) => !uploadedFileName(url));
     if (badImage) {
       return NextResponse.json(
         { error: 'رابط صورة غير صالح. ارفع الصور من هذه الصفحة.' },

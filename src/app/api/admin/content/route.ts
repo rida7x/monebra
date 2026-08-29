@@ -5,6 +5,7 @@ import { requireAdmin, UnauthorizedError, ForbiddenError } from '@/lib/auth';
 import { invalidateHero } from '@/lib/cache';
 import { revalidatePath } from 'next/cache';
 import { logError } from '@/lib/logger';
+import { uploadedFileName } from '@/lib/storage';
 
 /**
  * إدارة المحتوى: صفحات السياسات وشريحة الواجهة الرئيسية.
@@ -90,7 +91,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (data.mediaUrl && !data.mediaUrl.startsWith('/uploads/')) {
+    // ⚠️ نفس فخّ المنتجات: البادئة تختلف باختلاف المزوّد (`/uploads/`
+    // محليًا و`/api/images/` على مخزن Netlify)، فالحارس المشترك وحده يعرف
+    // الاثنتين — ويتحقق من نمط الاسم فوق ذلك.
+    if (data.mediaUrl && !uploadedFileName(data.mediaUrl)) {
       return NextResponse.json(
         { error: 'ارفع الصورة من هذه الصفحة بدل لصق رابط خارجي' },
         { status: 400 },
