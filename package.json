@@ -21,7 +21,8 @@
     "icons": "tsx scripts/generate-icons.ts",
     "brand": "tsx scripts/build-brand.ts",
     "db:export": "tsx scripts/db-transfer.ts export",
-    "db:import": "tsx scripts/db-transfer.ts import"
+    "db:import": "tsx scripts/db-transfer.ts import",
+    "setup:supabase": "tsx scripts/setup-supabase.ts"
   },
   "dependencies": {
     "@netlify/blobs": "^11.0.2",
