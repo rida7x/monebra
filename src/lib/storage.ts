@@ -4,6 +4,8 @@ import { mkdir, writeFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import sharp from 'sharp';
 
+import { logError } from '@/lib/logger';
+
 /**
  * تخزين الصور.
  *
@@ -87,10 +89,20 @@ export async function saveImage(file: File): Promise<SaveResult> {
     return { ok: false, error: 'نوع الملف غير مدعوم. استخدم JPG أو PNG أو WebP' };
   }
 
+  /**
+   * ⚠️ المعالجة والحفظ في `try` منفصلين عمدًا.
+   *
+   * كانا في واحد بجملة `catch` واحدة تقول «تأكد أن الملف صورة صالحة»، وهي
+   * جملة صحيحة لفشل sharp وكاذبة تمامًا لفشل المخزن: يرفع التاجر صورة
+   * سليمة فيُقال له إنها تالفة، فيجرّب صورة بعد صورة بلا فائدة بينما
+   * السبب في مكان آخر — ولا يبقى أثر في السجل يدلّ عليه.
+   */
+  let processed: { data: Buffer; width: number; height: number; size: number };
+
   try {
     const input = Buffer.from(await file.arrayBuffer());
 
-    const processed = await sharp(input, { failOn: 'error' })
+    processed = await sharp(input, { failOn: 'error' })
       .rotate() // يحترم اتجاه EXIF — بدونه تظهر صور الهاتف مقلوبة
       .resize({
         width: MAX_DIMENSION,
@@ -99,13 +111,25 @@ export async function saveImage(file: File): Promise<SaveResult> {
         withoutEnlargement: true,
       })
       .webp({ quality: WEBP_QUALITY })
-      .toBuffer({ resolveWithObject: true });
+      .toBuffer({ resolveWithObject: true })
+      .then((result) => ({ ...result.info, data: result.data }));
+  } catch (error) {
+    // sharp يرمي على أي ملف ليس صورة صالحة — نعامله كرفض لا كخطأ نظام
+    await logError(error, { path: 'saveImage/معالجة', type: file.type });
 
-    // اسم عشوائي: يمنع تخمين مسارات الصور، ويمنع الكتابة فوق ملف موجود،
-    // ويمنع أي محاولة تجاوز مسار عبر اسم الملف الأصلي
-    const name = `${Date.now().toString(36)}-${randomBytes(8).toString('hex')}.webp`;
+    return {
+      ok: false,
+      error: 'تعذّرت قراءة الصورة. تأكد أن الملف صورة صالحة.',
+    };
+  }
 
-    if (storageDriver() === 'netlify-blobs') {
+  // اسم عشوائي: يمنع تخمين مسارات الصور، ويمنع الكتابة فوق ملف موجود،
+  // ويمنع أي محاولة تجاوز مسار عبر اسم الملف الأصلي
+  const name = `${Date.now().toString(36)}-${randomBytes(8).toString('hex')}.webp`;
+  const driver = storageDriver();
+
+  try {
+    if (driver === 'netlify-blobs') {
       const store = await blobStore();
       // `BlobInput` يقبل ArrayBuffer لا Uint8Array — و`Buffer` قد يكون
       // نافذة على مخزن أكبر، فنقتطع نطاقه بالضبط بدل تمرير الكامل
@@ -121,21 +145,22 @@ export async function saveImage(file: File): Promise<SaveResult> {
       await mkdir(UPLOAD_DIR, { recursive: true });
       await writeFile(path.join(UPLOAD_DIR, name), processed.data);
     }
+  } catch (error) {
+    await logError(error, { path: 'saveImage/تخزين', driver });
 
     return {
-      ok: true,
-      url: `${publicPrefix()}/${name}`,
-      width: processed.info.width,
-      height: processed.info.height,
-      bytes: processed.info.size,
-    };
-  } catch {
-    // sharp يرمي على أي ملف ليس صورة صالحة — نعامله كرفض لا كخطأ نظام
-    return {
       ok: false,
-      error: 'تعذّرت قراءة الصورة. تأكد أن الملف صورة صالحة.',
+      error: 'الصورة سليمة لكن تعذّر حفظها في المخزن. راجع سجل الأخطاء.',
     };
   }
+
+  return {
+    ok: true,
+    url: `${publicPrefix()}/${name}`,
+    width: processed.width,
+    height: processed.height,
+    bytes: processed.size,
+  };
 }
 
 /**
