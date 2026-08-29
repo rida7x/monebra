@@ -353,6 +353,69 @@ async function main() {
   step(4, 'بناء الجداول على Supabase');
 
   /**
+   * فحص ما في القاعدة قبل الكتابة.
+   *
+   * ⚠️ `prisma db push` يجعل القاعدة **مطابقة** للمخطّط، فيحذف أي جدول
+   * زائد. على قاعدة فيها جداول سابقة يسأل سؤالًا تفاعليًا — وهو سؤال لا
+   * يصل إلى المستخدم هنا فتُلغى العملية بلا سبب ظاهر (هذا ما حدث فعلًا:
+   * جدول `backups` بصفّ واحد أوقف كل شيء).
+   *
+   * فنسأل نحن، بالعربية، وبعد أن نعرض ما سيُحذف وكم صفًا فيه.
+   */
+  const expected = new Set(
+    [...schema.matchAll(/@@map\("([^"]+)"\)/g)].map((m) => m[1]!),
+  );
+
+  const inspector = new Client({
+    connectionString: url,
+    ssl: { rejectUnauthorized: false },
+  });
+
+  const strangers: Array<{ table: string; rows: number }> = [];
+
+  await inspector.connect();
+  try {
+    const { rows } = await inspector.query<{ table_name: string }>(
+      `select table_name from information_schema.tables
+       where table_schema = 'public' and table_type = 'BASE TABLE'`,
+    );
+
+    for (const { table_name: table } of rows) {
+      if (expected.has(table) || table === '_prisma_migrations') continue;
+
+      // اسم الجدول من القاعدة نفسها لا من مدخل مستخدم، لكن نقتبسه احتياطًا
+      const count = await inspector.query<{ n: number }>(
+        `select count(*)::int n from "${table.replace(/"/g, '""')}"`,
+      );
+
+      strangers.push({ table, rows: count.rows[0]?.n ?? 0 });
+    }
+  } finally {
+    await inspector.end();
+  }
+
+  if (strangers.length > 0) {
+    say('');
+    say('  ⚠ في قاعدتك جداول ليست من المتجر:');
+    for (const s of strangers) {
+      say(`     • ${s.table} — ${s.rows} صفًا`);
+    }
+    say('');
+    say('  بناء جداول المتجر يحذفها. إن كنت لا تعرف ما هي فالغالب أنها');
+    say('  بقايا تجربة على Supabase ولا قيمة لها.');
+    say('');
+
+    const answer = await ask('  أحذفها وأكمل؟ اكتب «نعم» ثم Enter: ');
+
+    if (answer !== 'نعم' && answer.toLowerCase() !== 'yes') {
+      throw new Error(
+        'أُلغي بناءً على طلبك — لم يُحذف شيء.\n' +
+          '  إن كانت تلك الجداول مهمة، انسخ محتواها من لوحة Supabase أولًا.',
+      );
+    }
+  }
+
+  /**
    * ينفّذ أمرًا ويحتفظ بمخرجاته في السجلّ.
    *
    * ⚠️ `stdio: 'inherit'` كان يمرّر مخرجات Prisma إلى الشاشة فقط، فيضيع نص
@@ -391,7 +454,9 @@ async function main() {
    *
    * `db push` يبني الجداول من المخطّط مباشرة: بلا قاعدة ظل وبلا بذر.
    */
-  run('npx prisma db push');
+  // `--accept-data-loss` بعد موافقة صريحة أعلاه لا قبلها. وبدونه يطرح
+  // Prisma سؤالًا تفاعليًا لا يصل إلى المستخدم، فتُلغى العملية صامتة.
+  run('npx prisma db push --accept-data-loss');
   run('npx prisma generate');
 
   // ── ٥ · البيانات ──
