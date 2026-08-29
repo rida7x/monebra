@@ -1,5 +1,6 @@
 import 'server-only';
 import { PAYMENT_METHODS, type PaymentMethod } from '@/lib/constants';
+import { dpayToken, dpayWebhookSecret } from '@/lib/payments/dpay';
 
 /**
  * أي طرق الدفع متاحة فعلًا في هذه اللحظة.
@@ -17,33 +18,27 @@ import { PAYMENT_METHODS, type PaymentMethod } from '@/lib/constants';
  * فبقاء المصدر واحدًا هو ما يجعل التحقق ذا معنى.
  */
 
-/** المتغيّرات التي لا يعمل المزوّد بدونها. فارغة = غير موصول بعد. */
-const REQUIRED_ENV: Record<PaymentMethod, readonly string[]> = {
-  // الدفع عند الاستلام لا يحتاج مزوّدًا — متاح دائمًا
-  cod: [],
-  mobicash: ['MOBICASH_MERCHANT_ID', 'MOBICASH_API_KEY', 'MOBICASH_API_URL'],
-  edfali: ['EDFALI_MERCHANT_ID', 'EDFALI_API_KEY', 'EDFALI_API_URL'],
-};
-
 /**
- * ⚠️ حتى مع وجود البيانات، تبقى الطريقة معطّلة ما دام الربط لم يُكتب بعد.
- * وجود مفتاح في البيئة لا يعني أن الشيفرة تعرف كيف تُخاطب المصرف؛ ورفع
- * هذه الراية قبل كتابة الربط واختباره يُنتج بالضبط الزرّ الوهمي الذي
- * يمنعه هذا الملف. تُرفع لكل مزوّد في الالتزام الذي يُنجز ربطه.
+ * موبي كاش وأدفعلي كلاهما عبر بوّابة DPay الواحدة، فشرطهما واحد.
+ *
+ * ⚠️ سرّ الـ webhook شرط لا رفاهية: بدونه لا نستطيع التحقق من تأكيد الدفع،
+ * وطريقة تُحصّل ولا نتحقق من تأكيدها أسوأ من طريقة معطّلة.
  */
-const IMPLEMENTED: Record<PaymentMethod, boolean> = {
-  cod: true,
-  mobicash: false,
-  edfali: false,
+function dpayReady(): boolean {
+  return Boolean(dpayToken() && dpayWebhookSecret());
+}
+
+const AVAILABILITY: Record<PaymentMethod, () => boolean> = {
+  // الدفع عند الاستلام لا يحتاج مزوّدًا — متاح دائمًا
+  cod: () => true,
+  mobicash: dpayReady,
+  edfali: dpayReady,
 };
 
 export function isPaymentMethodEnabled(method: string): method is PaymentMethod {
   if (!(PAYMENT_METHODS as readonly string[]).includes(method)) return false;
 
-  const key = method as PaymentMethod;
-  if (!IMPLEMENTED[key]) return false;
-
-  return REQUIRED_ENV[key].every((name) => Boolean(process.env[name]));
+  return AVAILABILITY[method as PaymentMethod]();
 }
 
 /** الطرق التي تُعرض للزبون — بالترتيب المعروض */

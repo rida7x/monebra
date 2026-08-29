@@ -366,6 +366,18 @@ model Order {
   paymentMethod String @default("cod")
   paymentStatus String @default("pending") // pending | paid | refunded
 
+  /**
+   * معرّف جلسة الدفع لدى DPay.
+   *
+   * ⚠️ فريد عمدًا. تأكيد الدفع يصل عبر webhook قد يُسلَّم أكثر من مرة (DPay
+   * يعيد المحاولة خمس مرات عند أي ردّ غير 2xx)، والقيد الفريد يجعل ربط
+   * جلستين بطلب واحد مستحيلًا على مستوى القاعدة لا على مستوى الشيفرة.
+   */
+  paymentSessionId String? @unique
+  /** مرجع العملية من المصرف — يُعرض للتاجر عند المراجعة */
+  paymentReference String?
+  paidAt           DateTime?
+
   // ── snapshot بيانات العميل وقت الطلب ──
   customerName  String
   customerPhone String
