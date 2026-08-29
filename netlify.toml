@@ -1,0 +1,51 @@
+# ════════════════════════════════════════════════════════════════════
+#  Monebra Perfume — إعداد Netlify
+#
+#  المتجر تطبيق Next.js بخادم، لا صفحات ثابتة: الأسعار والمخزون تُحسب
+#  على الخادم عند كل طلب. يشغّله Netlify عبر دوال بلا حالة.
+#
+#  ⚠️ ثلاثة متغيّرات بيئة **إلزامية** تُضبط من لوحة Netlify:
+#     Site configuration ← Environment variables
+#
+#       DATABASE_URL          رابط Supabase — Session pooler (منفذ 5432)
+#                             لا Transaction pooler: يكسر إنشاء الطلبات
+#       AUTH_SECRET           ناتج: openssl rand -base64 32
+#       NEXT_PUBLIC_SITE_URL  https://اسم-موقعك.netlify.app
+#
+#  انظر deploy/NETLIFY.md للخطوات كاملة.
+# ════════════════════════════════════════════════════════════════════
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # ⚠️ قرص الدالة مؤقت: أي كتابة فيه تختفي عند أول نشر. هذا يحوّل رفع
+  # الصور إلى مخزن Netlify Blobs الدائم. تركه على "local" يعني أن كل صورة
+  # يرفعها المدير تضيع بلا رسالة خطأ.
+  STORAGE_DRIVER = "netlify-blobs"
+  NODE_VERSION = "22"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# ── ترويسات ──
+# الترويسات الأمنية الأساسية تأتي من next.config.ts وتُطبَّق على كل استجابة.
+# هنا فقط ما يخص التخزين المؤقت للأصول الثابتة.
+
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# صور المنتجات: الاسم عشوائي ولا يُعاد استخدامه، فالمحتوى تحت اسم معيّن
+# لا يتغير أبدًا
+[[headers]]
+  for = "/api/images/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/uploads/*"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"

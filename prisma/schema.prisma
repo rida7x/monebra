@@ -1,0 +1,728 @@
+// ═══════════════════════════════════════════════════════════════════
+//  Monebra Perfume — Database Schema
+//  المزود الحالي: SQLite (تطوير) — الانتقال إلى PostgreSQL = تغيير provider فقط
+//
+//  قواعد التصميم:
+//   • كل المبالغ المالية Int بالوحدة الصغرى (×1000) — انظر src/lib/money.ts
+//   • الحالات String وليس enum ← توافق SQLite/Postgres + توسع بلا migration
+//   • حقول JSON مخزنة String ← توافق كامل بين المزودين
+//   • الطلبات تحتفظ بنسخة (snapshot) من بيانات المنتج والعميل
+// ═══════════════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ───────────────────────── الهوية والصلاحيات ─────────────────────────
+
+model AdminUser {
+  id                  String    @id @default(cuid())
+  name                String
+  email               String    @unique
+  passwordHash        String
+  role                String    @default("orders_manager") // super_admin | manager | orders_manager | inventory_manager
+  permissionsOverride String? // JSON: string[] — صلاحيات إضافية
+  isActive            Boolean   @default(true)
+  lastLoginAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  sessions           AdminSession[]
+  statusChanges      OrderStatusHistory[]
+  inventoryMovements InventoryMovement[]
+
+  @@index([role])
+  @@map("admin_users")
+}
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  adminId   String
+  tokenHash String   @unique
+  expiresAt DateTime
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([expiresAt])
+  @@map("admin_sessions")
+}
+
+model LoginAttempt {
+  id         String   @id @default(cuid())
+  identifier String // البريد أو الـ IP
+  success    Boolean  @default(false)
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([identifier, createdAt])
+  @@map("login_attempts")
+}
+
+// ───────────────────────────── الكتالوج ─────────────────────────────
+
+model Category {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  description     String?
+  image           String?
+  parentId        String?
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+  metaTitle       String?
+  metaDescription String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  parent           Category?         @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children         Category[]        @relation("CategoryTree")
+  products         Product[]
+  couponTargets    CouponTarget[]
+  promotionTargets PromotionTarget[]
+
+  @@index([isActive, sortOrder])
+  @@map("categories")
+}
+
+/// العلامات العالمية المستخدمة للمقارنة فقط — نص بلا شعارات
+model InspirationBrand {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  aliases   String? // أسماء بديلة مفصولة بفاصلة — لتحسين البحث
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+
+  @@map("inspiration_brands")
+}
+
+model Product {
+  id               String  @id @default(cuid())
+  type             String  @default("simple") // simple | bundle
+  name             String
+  slug             String  @unique
+  sku              String? @unique
+  shortDescription String?
+  description      String?
+
+  categoryId         String?
+  inspirationBrandId String?
+  /// اسم العطر العالمي المستوحى منه — يُعرض دائمًا مسبوقًا بـ "مستوحى من"
+  inspirationName    String?
+
+  gender          String  @default("unisex") // men | women | unisex
+  fragranceFamily String? // شرقي | خشبي | زهري | حمضي | فوجير | شيبر
+  longevity       Int     @default(3) // 1..5 الثبات
+  sillage         Int     @default(3) // 1..5 الفوحان
+  season          String? // summer,winter,spring,autumn
+  occasion        String? // daily,events,work,night
+  timeOfDay       String? // day | night | both
+
+  isActive     Boolean @default(true)
+  isFeatured   Boolean @default(false)
+  isNew        Boolean @default(false)
+  isBestSeller Boolean @default(false)
+  isLimited    Boolean @default(false)
+
+  metaTitle       String?
+  metaDescription String?
+  keywords        String?
+  ogImage         String?
+
+  viewCount  Int @default(0)
+  salesCount Int @default(0)
+  sortOrder  Int @default(0)
+
+  /// نص البحث المُطبّع: الاسم + العطر المستوحى منه + العلامة + النوتات +
+  /// العائلة + الكلمات المفتاحية، بعد توحيد الألف والهمزة والتاء المربوطة.
+  /// يُبنى عبر buildSearchText() عند كل كتابة — لا يُحرَّر يدويًا.
+  searchText String?
+
+  /// أقل سعر بين الأحجام المفعّلة — وهو السعر المعروض على البطاقة.
+  /// مُخزَّن لا محسوب، حتى يتم الترتيب بالسعر في SQL مع ترقيم حقيقي بدل
+  /// جلب الكتالوج كله وتقطيعه في التطبيق. يُحدَّث مع كل تعديل على الأحجام.
+  minPrice Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  category         Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  inspirationBrand InspirationBrand? @relation(fields: [inspirationBrandId], references: [id], onDelete: SetNull)
+
+  images           ProductImage[]
+  variants         ProductVariant[]
+  notes            ProductNote[]
+  tags             ProductTag[]
+  reviews          Review[]
+  orderItems       OrderItem[]
+  /// عناصر هذه الباقة (عندما type = bundle)
+  bundleItems      BundleItem[]      @relation("BundleOwner")
+  couponTargets    CouponTarget[]
+  promotionTargets PromotionTarget[]
+  analyticsEvents  AnalyticsEvent[]
+
+  @@index([isActive, sortOrder])
+  @@index([categoryId, isActive])
+  @@index([gender, isActive])
+  @@index([type, isActive])
+  @@index([isBestSeller, isActive])
+  @@index([isNew, isActive])
+  @@index([searchText])
+  @@index([minPrice])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  url       String
+  alt       String?
+  sortOrder Int     @default(0)
+  isPrimary Boolean @default(false)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, sortOrder])
+  @@map("product_images")
+}
+
+model ProductVariant {
+  id                String  @id @default(cuid())
+  productId         String
+  label             String // "50 مل"
+  sizeMl            Int?
+  sku               String? @unique
+  /// السعر بالوحدة الصغرى (×1000)
+  price             Int
+  /// السعر قبل الخصم — للعرض فقط
+  comparePrice      Int?
+  stock             Int     @default(0)
+  lowStockThreshold Int     @default(5)
+  isActive          Boolean @default(true)
+  sortOrder         Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product    Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+  movements  InventoryMovement[]
+  bundleUses BundleItem[]        @relation("BundleMember")
+
+  @@index([productId, sortOrder])
+  @@index([stock])
+  @@map("product_variants")
+}
+
+model ProductNote {
+  id        String @id @default(cuid())
+  productId String
+  type      String // top | middle | base
+  name      String
+  sortOrder Int    @default(0)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, type])
+  @@map("product_notes")
+}
+
+model Tag {
+  id   String @id @default(cuid())
+  name String @unique
+  slug String @unique
+
+  products ProductTag[]
+
+  @@map("tags")
+}
+
+model ProductTag {
+  productId String
+  tagId     String
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([productId, tagId])
+  @@map("product_tags")
+}
+
+/// عنصر داخل باقة — يربط حجم منتج بالباقة
+model BundleItem {
+  id            String @id @default(cuid())
+  bundleId      String
+  itemVariantId String
+  quantity      Int    @default(1)
+  sortOrder     Int    @default(0)
+
+  bundle      Product        @relation("BundleOwner", fields: [bundleId], references: [id], onDelete: Cascade)
+  itemVariant ProductVariant @relation("BundleMember", fields: [itemVariantId], references: [id], onDelete: Cascade)
+
+  @@index([bundleId])
+  @@map("bundle_items")
+}
+
+// ───────────────────────────── التوصيل ─────────────────────────────
+
+model City {
+  id           String  @id @default(cuid())
+  name         String  @unique
+  /// رسوم التوصيل بالوحدة الصغرى (×1000)
+  deliveryFee  Int     @default(0)
+  deliveryDays String?
+  isActive     Boolean @default(true)
+  sortOrder    Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  areas     Area[]
+  orders    Order[]
+  addresses Address[]
+
+  @@index([isActive, sortOrder])
+  @@map("cities")
+}
+
+model Area {
+  id                   String  @id @default(cuid())
+  cityId               String
+  name                 String
+  /// يتجاوز رسوم المدينة عند التعيين
+  deliveryFeeOverride  Int?
+  deliveryDaysOverride String?
+  isActive             Boolean @default(true)
+  sortOrder            Int     @default(0)
+
+  city      City      @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  orders    Order[]
+  addresses Address[]
+
+  @@unique([cityId, name])
+  @@index([cityId, isActive])
+  @@map("areas")
+}
+
+// ────────────────────────── العملاء والطلبات ──────────────────────────
+
+model Customer {
+  id          String   @id @default(cuid())
+  phone       String   @unique
+  name        String
+  email       String?
+  ordersCount Int      @default(0)
+  /// إجمالي الإنفاق بالوحدة الصغرى
+  totalSpent  Int      @default(0)
+  isBlocked   Boolean  @default(false)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders       Order[]
+  addresses    Address[]
+  couponUsages CouponUsage[]
+
+  @@map("customers")
+}
+
+model Address {
+  id         String  @id @default(cuid())
+  customerId String
+  cityId     String?
+  areaId     String?
+  line       String
+  notes      String?
+  isDefault  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  city     City?    @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  area     Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
+
+  @@index([customerId])
+  @@map("addresses")
+}
+
+model Order {
+  id          String  @id @default(cuid())
+  orderNumber String  @unique // MON-10025
+  customerId  String?
+
+  status        String @default("new") // new|confirmed|preparing|out_for_delivery|delivered|cancelled|returned
+  paymentMethod String @default("cod")
+  paymentStatus String @default("pending") // pending | paid | refunded
+
+  // ── snapshot بيانات العميل وقت الطلب ──
+  customerName  String
+  customerPhone String
+  cityId        String?
+  areaId        String?
+  cityName      String
+  areaName      String?
+  addressLine   String
+  notes         String?
+
+  // ── المبالغ (الوحدة الصغرى ×1000) ──
+  subtotal      Int
+  discountTotal Int @default(0)
+  deliveryFee   Int @default(0)
+  total         Int
+
+  couponId          String?
+  couponCode        String?
+  /// JSON: تفصيل الخصومات المطبقة
+  discountBreakdown String?
+
+  // ── التتبع والتحليلات ──
+  deviceType String? // mobile | desktop | tablet
+  source     String?
+  referrer   String?
+  ip         String?
+  userAgent  String?
+
+  // ── حراسة المخزون ──
+  stockApplied  Boolean @default(false)
+  stockRestored Boolean @default(false)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  confirmedAt DateTime?
+  deliveredAt DateTime?
+  cancelledAt DateTime?
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  city     City?     @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  area     Area?     @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  coupon   Coupon?   @relation(fields: [couponId], references: [id], onDelete: SetNull)
+
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+  movements     InventoryMovement[]
+  reviews       Review[]
+  couponUsages  CouponUsage[]
+
+  @@index([status, createdAt])
+  @@index([customerPhone])
+  @@index([cityId])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String?
+  variantId String?
+
+  // ── snapshot كامل — الفاتورة تبقى صحيحة حتى لو حُذف المنتج ──
+  productName  String
+  variantLabel String
+  imageUrl     String?
+  productSlug  String?
+
+  unitPrice Int
+  quantity  Int
+  lineTotal Int
+
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id         String   @id @default(cuid())
+  orderId    String
+  fromStatus String?
+  toStatus   String
+  adminId    String?
+  note       String?
+  createdAt  DateTime @default(now())
+
+  order Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  admin AdminUser? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, createdAt])
+  @@map("order_status_history")
+}
+
+/// عدّاد تسلسلي لأرقام الطلبات — يمنع التصادم
+model Counter {
+  key   String @id
+  value Int    @default(0)
+
+  @@map("counters")
+}
+
+// ───────────────────────────── المخزون ─────────────────────────────
+
+model InventoryMovement {
+  id         String  @id @default(cuid())
+  variantId  String
+  /// موجب = إضافة، سالب = خصم
+  delta      Int
+  reason     String // order | cancel | return | restock | adjustment
+  stockAfter Int
+  orderId    String?
+  adminId    String?
+  note       String?
+
+  createdAt DateTime @default(now())
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  order   Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  admin   AdminUser?     @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([variantId, createdAt])
+  @@index([reason])
+  @@map("inventory_movements")
+}
+
+// ──────────────────────────── العروض ────────────────────────────
+
+model Coupon {
+  id               String    @id @default(cuid())
+  code             String    @unique
+  description      String?
+  type             String // percent | fixed
+  /// نسبة مئوية (0-100) أو مبلغ ثابت بالوحدة الصغرى
+  value            Int
+  minOrderTotal    Int       @default(0)
+  /// حد أقصى للخصم عند النوع percent
+  maxDiscount      Int?
+  usageLimit       Int?
+  usageCount       Int       @default(0)
+  perCustomerLimit Int?
+  scope            String    @default("all") // all | products | categories
+  startsAt         DateTime?
+  endsAt           DateTime?
+  isActive         Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  targets CouponTarget[]
+  orders  Order[]
+  usages  CouponUsage[]
+
+  @@index([isActive])
+  @@map("coupons")
+}
+
+model CouponTarget {
+  id         String  @id @default(cuid())
+  couponId   String
+  productId  String?
+  categoryId String?
+
+  coupon   Coupon    @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([couponId])
+  @@map("coupon_targets")
+}
+
+model CouponUsage {
+  id         String   @id @default(cuid())
+  couponId   String
+  orderId    String
+  customerId String?
+  amount     Int
+  createdAt  DateTime @default(now())
+
+  coupon   Coupon    @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  order    Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([couponId])
+  @@index([customerId])
+  @@map("coupon_usages")
+}
+
+/// خصومات تلقائية بلا كود
+model Promotion {
+  id       String    @id @default(cuid())
+  name     String
+  type     String // percent | fixed
+  value    Int
+  scope    String    @default("products") // products | categories | all
+  startsAt DateTime?
+  endsAt   DateTime?
+  isActive Boolean   @default(true)
+  priority Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  targets PromotionTarget[]
+
+  @@index([isActive, startsAt, endsAt])
+  @@map("promotions")
+}
+
+model PromotionTarget {
+  id          String  @id @default(cuid())
+  promotionId String
+  productId   String?
+  categoryId  String?
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  product   Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category  Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([promotionId])
+  @@map("promotion_targets")
+}
+
+// ─────────────────────── المحتوى والتحليلات ───────────────────────
+
+model Review {
+  id           String   @id @default(cuid())
+  productId    String
+  orderId      String?
+  customerName String
+  phone        String?
+  rating       Int // 1..5
+  comment      String?
+  status       String   @default("pending") // pending | approved | hidden
+  adminNote    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([productId, status])
+  @@index([status, createdAt])
+  @@map("reviews")
+}
+
+model HeroSlide {
+  id        String  @id @default(cuid())
+  title     String
+  subtitle  String?
+  mediaUrl  String?
+  mediaType String  @default("image") // image | video
+  ctaText   String?
+  ctaLink   String?
+  ctaText2  String?
+  ctaLink2  String?
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
+  @@map("hero_slides")
+}
+
+model Setting {
+  key       String   @id
+  /// القيمة مخزنة كـ JSON string
+  value     String
+  group     String   @default("general")
+  updatedAt DateTime @updatedAt
+
+  @@index([group])
+  @@map("settings")
+}
+
+model ContentPage {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  title           String
+  body            String
+  isActive        Boolean  @default(true)
+  metaTitle       String?
+  metaDescription String?
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("content_pages")
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  type       String // new_order | low_stock | new_review | error
+  title      String
+  body       String?
+  entityType String?
+  entityId   String?
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([isRead, createdAt])
+  @@map("notifications")
+}
+
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  type       String // page_view | product_view | add_to_cart | begin_checkout | purchase
+  productId  String?
+  sessionId  String?
+  deviceType String?
+  path       String?
+  referrer   String?
+  /// JSON إضافي
+  meta       String?
+  createdAt  DateTime @default(now())
+
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([type, createdAt])
+  @@index([productId, type])
+  @@index([sessionId])
+  @@map("analytics_events")
+}
+
+model ErrorLog {
+  id        String   @id @default(cuid())
+  level     String   @default("error") // error | warn | info
+  message   String
+  stack     String?
+  /// JSON
+  context   String?
+  path      String?
+  createdAt DateTime @default(now())
+
+  @@index([level, createdAt])
+  @@map("error_logs")
+}
+
+/// عدّادات تحديد المعدّل.
+///
+/// ⚠️ كانت في ذاكرة العملية (`new Map()`)، وهو ما يكفي خادمًا واحدًا. على
+/// استضافة بلا حالة — Netlify وأمثالها — تُشغَّل نسخ متعددة وتُطفأ باستمرار،
+/// فيتصفّر العدّاد مع كل نسخة جديدة وتسقط الحماية عمليًا: يستطيع أحدهم
+/// إغراق المتجر بالطلبات أو تخمين أرقام التتبّع بلا حدّ فعلي.
+///
+/// المفتاح يحمل نوع العملية وعنوان الزائر معًا (`order:1.2.3.4`).
+model RateLimit {
+  key       String   @id
+  count     Int      @default(0)
+  expiresAt DateTime
+
+  /// لحذف المنتهية دفعة واحدة بدل مسحها صفًا صفًا
+  @@index([expiresAt])
+  @@map("rate_limits")
+}

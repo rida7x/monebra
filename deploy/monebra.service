@@ -1,0 +1,56 @@
+# ════════════════════════════════════════════════════════════════════
+#  Monebra Perfume — خدمة systemd
+#
+#  انسخه إلى:  /etc/systemd/system/monebra.service
+#  ثم:        sudo systemctl daemon-reload
+#             sudo systemctl enable --now monebra
+#
+#  المتابعة:   sudo systemctl status monebra
+#             sudo journalctl -u monebra -f       ← السجل الحيّ
+#
+#  عدّل User و WorkingDirectory إن اخترت مسارًا آخر.
+# ════════════════════════════════════════════════════════════════════
+
+[Unit]
+Description=Monebra Perfume store
+Documentation=file:///var/www/monebra/DEPLOYMENT.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=monebra
+Group=monebra
+WorkingDirectory=/var/www/monebra
+
+# متغيّرات البيئة تُقرأ من ملف .env في WorkingDirectory — يقرأه Next.js
+# بنفسه. لا نستخدم EnvironmentFile كي لا يختلف تفسير علامات الاقتباس بين
+# systemd و dotenv على نفس الملف.
+Environment=NODE_ENV=production
+
+# ⚠️ الربط على 127.0.0.1 لا 0.0.0.0: الوصول من الخارج يمرّ عبر Nginx
+# وحده. لو استمع التطبيق على كل الواجهات لأمكن فتح المنفذ 3000 مباشرة —
+# فيتجاوز الزائر Nginx ومعه ترويسة عنوان الزائر، فينهار تحديد المعدّل.
+ExecStart=/usr/bin/npm start -- --hostname 127.0.0.1 --port 3000
+
+Restart=always
+RestartSec=5
+
+# إعادة التشغيل التلقائي تخفي الأعطال المتكررة، فنحدّها: خمس محاولات في
+# الدقيقة ثم توقّف — كي يظهر العطل في status بدل دوران صامت
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=monebra
+
+# تقييدات أمنية — الخدمة لا تحتاج أكثر من مجلدها
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/monebra
+
+[Install]
+WantedBy=multi-user.target

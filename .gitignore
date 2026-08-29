@@ -1,0 +1,26 @@
+node_modules/
+.next/
+out/
+build/
+.env
+.env.local
+.env*.local
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+# قاعدة بيانات التطوير المحلية — لا تُرفع أبدًا
+/prisma/*.db
+/prisma/*.db-journal
+/prisma/*.db-shm
+/prisma/*.db-wal
+/dev.db*
+/public/uploads/*
+!/public/uploads/.gitkeep
+/src/generated/
+next-env.d.ts
+.vercel
+tsconfig.tsbuildinfo
+
+# نسخة البيانات المنقولة — تحوي تجزئة كلمة مرور المدير وبيانات العملاء
+/data-export.json
