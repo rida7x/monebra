@@ -15,24 +15,39 @@ import { PrismaPg } from '@prisma/adapter-pg';
  * وقت توليد الأنواع وبناء الـ migrations، فلا يقبل قيمة من البيئة.
  */
 /**
- * سقف اتصالات المسبح الواحد.
+ * إعدادات مسبح PostgreSQL — مضبوطة لاستضافة بلا حالة (دوال Netlify).
  *
  * ⚠️ `connection_limit=1` المكتوب في `DATABASE_URL` **لا أثر له هنا**: إنه
  * وسيط محرّك Prisma القديم، أما محوّل `pg` فيقرأ إعداداته من الكائن ولا
  * يلتفت إلى الرابط. وافتراضي `pg` عشرة اتصالات لكل مسبح.
  *
- * وSession pooler على خطة Supabase المجانية يقبل ١٥ اتصالًا للمشروع كله،
- * فمسبحان اثنان يكفيان لبلوغ السقف:
+ * وSession pooler على خطة Supabase المجانية يقبل **١٥ جلسة للمشروع كله**،
+ * وكل جلسة تُحجز طوال عمرها لا طوال الاستعلام. وNetlify تشغّل نسخًا
+ * متعددة من الدالة، لكلٍّ مسبحها. فبثلاثة اتصالات لكل نسخة تكفي خمس نسخ
+ * لإسقاط المتجر كله بـ:
  *   `(EMAXCONNSESSION) max clients reached in session mode`
+ * وأثره أن الصفحات التي تقرأ من القاعدة ترجع 500 بينما الصفحات الثابتة
+ * تعمل — فيبدو المتجر «نصف شغّال» بلا سبب ظاهر.
  *
- * ثلاثة تكفي المتجر بسعة: الطلبات تتوالى ولا تتزاحم على متجر بهذا الحجم،
- * ويبقى متّسع لبناء يجري بالتوازي مع تصفّح زبون.
+ * `max: 1` — نسخة الدالة تخدم طلبًا واحدًا في اللحظة أصلًا، فالثاني ترف.
+ * `idleTimeoutMillis` — الأهم: بدونه يبقى الاتصال محجوزًا ما دامت النسخة
+ * حيّة (دقائق بعد آخر طلب). عشر ثوانٍ تعيده إلى المسبح فيجد غيرُه مكانًا.
+ * `connectionTimeoutMillis` — عند الازدحام نفشل بسرعة برسالة مفهومة بدل
+ * أن يتجمّد الطلب حتى تقتله Netlify بلا أثر في السجل.
+ *
+ * إن كبر المتجر وتكرّر الخطأ رغم هذا: ارفع `Pool Size` من لوحة Supabase
+ * (Settings ← Database ← Connection pooling) — هذا هو الحلّ الذي يتوسّع،
+ * لا إنقاص الأرقام هنا أكثر.
  */
-const POOL_MAX = 3;
+const POOL = {
+  max: 1,
+  idleTimeoutMillis: 10_000,
+  connectionTimeoutMillis: 15_000,
+} as const;
 
 export function createDatabaseAdapter(url: string) {
   if (isPostgres(url)) {
-    return new PrismaPg({ connectionString: url, max: POOL_MAX });
+    return new PrismaPg({ connectionString: url, ...POOL });
   }
 
   if (url.startsWith('file:')) return new PrismaBetterSqlite3({ url });
