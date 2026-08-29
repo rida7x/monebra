@@ -24,7 +24,7 @@ import { Client } from 'pg';
  */
 
 const REGIONS = [
-  'eu-central-1', 'eu-central-2', 'eu-west-1', 'eu-west-2', 'eu-west-3',
+  'eu-west-1', 'eu-central-1', 'eu-central-2', 'eu-west-2', 'eu-west-3',
   'eu-north-1', 'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
   'ap-south-1', 'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1',
   'ap-northeast-2', 'ca-central-1', 'sa-east-1',
@@ -108,7 +108,7 @@ function askLine(prompt: string, mask = false): Promise<string> {
         if (char === BACKSPACE || char === '\b') {
           if (value.length > 0) {
             value = value.slice(0, -1);
-            if (!mask) stdout.write('\b \b');
+            stdout.write('\b \b');
           }
           continue;
         }
@@ -116,7 +116,9 @@ function askLine(prompt: string, mask = false): Promise<string> {
         // تجاهل مفاتيح التحكم والأسهم
         if (char >= ' ') {
           value += char;
-          if (!mask) stdout.write(char);
+          // النجمة تُظهر أن الكتابة تصل فعلًا. الإخفاء التام يترك المستخدم
+          // لا يدري أطُبع حرفه أم لا، فيكرّر أو يمسح بلا داعٍ.
+          stdout.write(mask ? '*' : char);
         }
       }
     };
@@ -131,8 +133,23 @@ async function ask(prompt: string, fallback = ''): Promise<string> {
 
 const askSecret = (prompt: string) => askLine(prompt, true);
 
-/** يحاول الاتصال بمضيف واحد. يعيد true عند النجاح. */
-async function probe(host: string, ref: string, password: string) {
+/**
+ * نتيجة محاولة الاتصال بمضيف واحد.
+ *
+ * ⚠️ التمييز بين `wrong-password` و`not-here` هو جوهر هذا السكربت: كلاهما
+ * «فشل اتصال»، لكن معناهما متعاكس. المجمّع يردّ:
+ *   28P01 → عرف مشروعك ورفض كلمة المرور  ← **هذا هو خادمك**
+ *   XX000 (ENOTFOUND tenant) → مشروعك ليس في هذه المنطقة
+ * خلطهما يُنتج رسالة «تعذّر الاتصال بأي منطقة» بينما الخادم صحيح وكلمة
+ * المرور وحدها خاطئة — فيبحث المستخدم في المكان الخطأ.
+ */
+type Probe = 'ok' | 'wrong-password' | 'not-here';
+
+async function probe(
+  host: string,
+  ref: string,
+  password: string,
+): Promise<Probe> {
   const client = new Client({
     host,
     port: PORT,
@@ -146,15 +163,18 @@ async function probe(host: string, ref: string, password: string) {
   try {
     await client.connect();
     await client.query('select 1');
-    return true;
-  } catch {
-    return false;
+    return 'ok';
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    return code === '28P01' ? 'wrong-password' : 'not-here';
   } finally {
     await client.end().catch(() => undefined);
   }
 }
 
-async function findHost(ref: string, password: string): Promise<string | null> {
+type Found = { host: string; status: Exclude<Probe, 'not-here'> } | null;
+
+async function findHost(ref: string, password: string): Promise<Found> {
   const hosts = PREFIXES.flatMap((prefix) =>
     REGIONS.map((region) => `${prefix}-${region}.pooler.supabase.com`),
   );
@@ -166,15 +186,16 @@ async function findHost(ref: string, password: string): Promise<string | null> {
     stdout.write('.');
 
     const results = await Promise.all(
-      hosts
-        .slice(i, i + BATCH)
-        .map(async (host) => ((await probe(host, ref, password)) ? host : null)),
+      hosts.slice(i, i + BATCH).map(async (host) => ({
+        host,
+        status: await probe(host, ref, password),
+      })),
     );
 
-    const found = results.find(Boolean);
-    if (found) {
+    const hit = results.find((r) => r.status !== 'not-here');
+    if (hit) {
       console.log();
-      return found;
+      return { host: hit.host, status: hit.status as Exclude<Probe, 'not-here'> };
     }
   }
 
@@ -201,23 +222,51 @@ async function main() {
     throw new Error('معرّف المشروع غير صالح. تجده في رابط لوحة Supabase.');
   }
 
-  const password = await askSecret('  كلمة مرور القاعدة (لا تظهر): ');
-  if (!password) throw new Error('كلمة المرور مطلوبة.');
-
-  // ── ٢ · الخادم ──
+  // ── ٢ · الخادم وكلمة المرور ──
+  // ثلاث محاولات: كلمة مرور خاطئة لا يجوز أن تعني إعادة كل شيء من أوله،
+  // ولا إعادة مسح المناطق — بعد أول نجاح في تحديد الخادم نعرفه.
   step(2, 'البحث عن خادم مشروعك');
-  say('  (نجرّب المناطق — قد يستغرق دقيقة)');
 
-  const host = await findHost(ref, password);
+  let host = '';
+  let password = '';
 
-  if (!host) {
-    throw new Error(
-      'تعذّر الاتصال بأي منطقة.\n' +
-        '  تحقق من كلمة المرور ومن معرّف المشروع، وأن المشروع ليس متوقفًا.',
-    );
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    password = await askSecret('  كلمة مرور قاعدة Supabase: ');
+    if (!password) throw new Error('كلمة المرور مطلوبة.');
+
+    if (host) {
+      // الخادم معروف — نتحقق من كلمة المرور وحدها
+      const status = await probe(host, ref, password);
+      if (status === 'ok') break;
+    } else {
+      say('  نبحث عن خادم مشروعك (قد يستغرق دقيقة)...');
+      const found = await findHost(ref, password);
+
+      if (!found) {
+        throw new Error(
+          'لم نجد مشروعك في أي منطقة.\n' +
+            `  تأكد أن معرّف المشروع صحيح (${ref}) وأن المشروع ليس متوقفًا\n` +
+            '  في لوحة Supabase.',
+        );
+      }
+
+      host = found.host;
+      say(`  ✓ خادمك: ${host}`);
+
+      if (found.status === 'ok') break;
+    }
+
+    if (attempt === 3) {
+      throw new Error(
+        'كلمة المرور غير صحيحة بعد ثلاث محاولات.\n' +
+          '  هي كلمة مرور **قاعدة البيانات** لا كلمة دخولك إلى Supabase.\n' +
+          '  إن نسيتها: لوحة Supabase ← Project Settings ← Database ←\n' +
+          '  Reset database password، ثم أعد تشغيل هذا الملف.',
+      );
+    }
+
+    say(`  ✗ كلمة المرور غير صحيحة — حاول مرة أخرى (${attempt}/3)\n`);
   }
-
-  say(`  ✓ ${host}`);
 
   const url =
     `postgresql://postgres.${ref}:${encodeURIComponent(password)}` +
