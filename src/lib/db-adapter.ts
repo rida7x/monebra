@@ -41,8 +41,16 @@ import { PrismaPg } from '@prisma/adapter-pg';
  */
 const POOL = {
   max: 1,
-  idleTimeoutMillis: 10_000,
+  /**
+   * ثانيتان لا عشر. الفرق ليس ضبطًا دقيقًا بل حدّ بين متجر يعمل وآخر لا:
+   * عشر طلبات متزامنة تُشغّل عشر نسخ، فإن بقيت جلسة كل نسخة محجوزة عشر
+   * ثوانٍ بعد فراغها تراكمت جلسات النسخ المنتهية فوق العاملة وتجاوز
+   * المجموع الخمس عشرة. قيست فعلًا: عشر ثوانٍ ⇒ فشل ٣ من ١٠.
+   */
+  idleTimeoutMillis: 2_000,
   connectionTimeoutMillis: 15_000,
+  // لا تُبقِ النسخة حيّة لأجل مسبح فارغ
+  allowExitOnIdle: true,
 } as const;
 
 export function createDatabaseAdapter(url: string) {
