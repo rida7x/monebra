@@ -23,6 +23,11 @@
   # ⚠️ قرص الدالة مؤقت: أي كتابة فيه تختفي عند أول نشر. هذا يحوّل رفع
   # الصور إلى مخزن Netlify Blobs الدائم. تركه على "local" يعني أن كل صورة
   # يرفعها المدير تضيع بلا رسالة خطأ.
+  #
+  # ⚠️ وهذا القسم **يُطبَّق وقت البناء وحده**. الدالة وقت التشغيل لا تراه،
+  # فاضبطه أيضًا متغيّرًا للموقع من لوحة Netlify أو بـ:
+  #   netlify env:set STORAGE_DRIVER netlify-blobs
+  # وإن نُسي، يستنتجه `storageDriver()` من `NETLIFY_BLOBS_CONTEXT`.
   STORAGE_DRIVER = "netlify-blobs"
   NODE_VERSION = "22"
 

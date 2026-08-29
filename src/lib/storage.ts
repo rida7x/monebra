@@ -42,9 +42,24 @@ export const BLOB_STORE = 'product-images';
 export type StorageDriver = 'local' | 'netlify-blobs';
 
 export function storageDriver(): StorageDriver {
-  return process.env.STORAGE_DRIVER === 'netlify-blobs'
-    ? 'netlify-blobs'
-    : 'local';
+  if (process.env.STORAGE_DRIVER === 'netlify-blobs') return 'netlify-blobs';
+  if (process.env.STORAGE_DRIVER === 'local') return 'local';
+
+  /**
+   * ⚠️ الاستنتاج عند غياب المتغيّر — وهو ما أنقذ رفع الصور فعلًا.
+   *
+   * `STORAGE_DRIVER` كان مكتوبًا في `netlify.toml` تحت `[build.environment]`
+   * وحدها، وتلك تُطبَّق **وقت البناء لا وقت التشغيل**. فكانت الدالة تقرأه
+   * فارغًا وترجع إلى `local`، فتحاول الكتابة على قرص للقراءة فقط:
+   *   `ENOENT: no such file or directory, mkdir '/var/task/public'`
+   *
+   * ولو نجحت الكتابة لكان أسوأ: قرص الدالة مؤقت، فالصور تختفي عند أول
+   * نشر بلا رسالة خطأ واحدة.
+   *
+   * `NETLIFY_BLOBS_CONTEXT` تحقنه بيئة Netlify في الدالة نفسها، فوجوده
+   * دليل قاطع على أننا نعمل هناك وأن المخزن متاح.
+   */
+  return process.env.NETLIFY_BLOBS_CONTEXT ? 'netlify-blobs' : 'local';
 }
 
 function publicPrefix(): string {
