@@ -28,3 +28,4 @@ tsconfig.tsbuildinfo
 
 # ربط المجلد بموقع Netlify — خاص بهذا الجهاز
 .netlify/
+deno.lock
