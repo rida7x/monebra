@@ -38,12 +38,36 @@ const CTRL_C = String.fromCharCode(3);
 const CTRL_D = String.fromCharCode(4);
 const BACKSPACE = String.fromCharCode(127);
 
+/**
+ * سجلّ نصّي لكل ما يجري.
+ *
+ * ⚠️ نافذة الأوامر تعرض العربية معكوسة وتبتلع السطور الطويلة، فقراءة خطأ
+ * حقيقي منها شبه مستحيلة. الملف يحتفظ بالنص كما هو — ومنه وحده يُعرف سبب
+ * الفشل بدل التخمين. تُنزع منه ألوان الطرفية وكلمة المرور.
+ */
+const LOG = 'setup-log.txt';
+const logLines: string[] = [`سجل التشغيل — ${new Date().toISOString()}`];
+let secretToMask = '';
+
+function record(text: string) {
+  let clean = text.replace(/\x1b\[[0-9;]*m/g, '');
+  if (secretToMask) clean = clean.split(secretToMask).join('«كلمة المرور»');
+  logLines.push(clean);
+}
+
+async function flushLog() {
+  await writeFile(LOG, logLines.join('\n'), 'utf8').catch(() => undefined);
+}
+
 function say(message: string) {
   console.log(message);
+  record(message);
 }
 
 function step(n: number, title: string) {
+  const line = `\n[${n}/6] ${title}`;
   console.log(`\n\x1b[1;33m[${n}/6] ${title}\x1b[0m`);
+  record(line);
 }
 
 /**
@@ -214,12 +238,24 @@ async function main() {
   step(1, 'بياناتك');
 
   const envText = await readFile('.env', 'utf8');
-  const guess = envText.match(/https:\/\/([a-z0-9]{20})\.supabase\.co/)?.[1] ?? '';
+
+  // المعرّف يُقرأ من ثلاثة مواضع محتملة: المتغيّر المخصّص، ثم رابط المشروع
+  // إن كان المستخدم قد لصقه، ثم رابط قاعدة جاهز. هكذا لا يُسأل عنه مرتين
+  // مهما تبدّلت `DATABASE_URL` بين التشغيلات.
+  const guess =
+    envText.match(/^SUPABASE_PROJECT_REF="?([a-z0-9]{16,})"?/m)?.[1] ??
+    envText.match(/https:\/\/([a-z0-9]{16,})\.supabase\.co/)?.[1] ??
+    envText.match(/postgres\.([a-z0-9]{16,}):/)?.[1] ??
+    '';
 
   const ref = await ask(`  معرّف المشروع${guess ? ` [${guess}]` : ''}: `, guess);
 
   if (!/^[a-z0-9]{16,}$/.test(ref)) {
-    throw new Error('معرّف المشروع غير صالح. تجده في رابط لوحة Supabase.');
+    throw new Error(
+      'معرّف المشروع غير صالح.\n' +
+        '  هو الجزء الطويل في رابط لوحة Supabase:\n' +
+        '  supabase.com/dashboard/project/XXXXXXXXXXXX  ← هذا',
+    );
   }
 
   // ── ٢ · الخادم وكلمة المرور ──
@@ -233,6 +269,9 @@ async function main() {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     password = await askSecret('  كلمة مرور قاعدة Supabase: ');
     if (!password) throw new Error('كلمة المرور مطلوبة.');
+
+    // من الآن تُحجب في السجل — رسائل Prisma تطبع رابط الاتصال كاملًا
+    secretToMask = password;
 
     if (host) {
       // الخادم معروف — نتحقق من كلمة المرور وحدها
@@ -288,9 +327,17 @@ async function main() {
     say('    (أعد بناء الترحيلات عند الحاجة: npx prisma migrate dev)');
   };
 
-  const updated = envText.includes('DATABASE_URL=')
+  let updated = envText.includes('DATABASE_URL=')
     ? envText.replace(/^DATABASE_URL=.*$/m, `DATABASE_URL="${url}"`)
     : `DATABASE_URL="${url}"\n${envText}`;
+
+  // نثبّت المعرّف كي لا يُسأل عنه في أي تشغيل لاحق
+  updated = updated.includes('SUPABASE_PROJECT_REF=')
+    ? updated.replace(
+        /^SUPABASE_PROJECT_REF=.*$/m,
+        `SUPABASE_PROJECT_REF="${ref}"`,
+      )
+    : `SUPABASE_PROJECT_REF="${ref}"\n${updated}`;
 
   await writeFile('.env', updated, 'utf8');
   say('  ✓ .env');
@@ -305,11 +352,34 @@ async function main() {
   // ── ٤ · المخطّط ──
   step(4, 'بناء الجداول على Supabase');
 
-  const run = (cmd: string) =>
-    execSync(cmd, {
-      stdio: 'inherit',
-      env: { ...process.env, DATABASE_URL: url },
-    });
+  /**
+   * ينفّذ أمرًا ويحتفظ بمخرجاته في السجلّ.
+   *
+   * ⚠️ `stdio: 'inherit'` كان يمرّر مخرجات Prisma إلى الشاشة فقط، فيضيع نص
+   * الخطأ الحقيقي بمجرد إغلاق النافذة. نلتقطها هنا ونطبعها **و**نسجّلها.
+   */
+  const run = (cmd: string) => {
+    record(`\n$ ${cmd}`);
+
+    try {
+      const out = execSync(cmd, {
+        encoding: 'utf8',
+        stdio: ['inherit', 'pipe', 'pipe'],
+        env: { ...process.env, DATABASE_URL: url },
+      });
+
+      if (out) {
+        stdout.write(out);
+        record(out);
+      }
+    } catch (error) {
+      const e = error as { stdout?: string; stderr?: string; message?: string };
+      const detail = [e.stdout, e.stderr, e.message].filter(Boolean).join('\n');
+      stdout.write(detail + '\n');
+      record(detail);
+      throw new Error(`فشل الأمر: ${cmd}`);
+    }
+  };
 
   /**
    * ⚠️ `db push` لا `migrate dev`، لسببين:
@@ -363,16 +433,23 @@ async function main() {
   say('  شغّل: npm run build && npm start\n');
 }
 
-main().catch(async (error) => {
-  console.error(
-    `\n\x1b[1;31m  ✗ ${error instanceof Error ? error.message : error}\x1b[0m\n`,
-  );
+main()
+  .then(flushLog)
+  .catch(async (error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`\n\x1b[1;31m  ✗ ${message}\x1b[0m\n`);
+    record(`\n✗ ${message}`);
 
-  if (rollback) {
-    await rollback().catch(() => {
-      console.error('  ⚠ تعذّر الإرجاع. راجع .env و prisma/schema.prisma.');
-    });
-  }
+    if (rollback) {
+      await rollback().catch(() => {
+        console.error('  ⚠ تعذّر الإرجاع. راجع .env و prisma/schema.prisma.');
+      });
+    }
 
-  process.exit(1);
-});
+    await flushLog();
+
+    console.error(`  السجل الكامل في: ${LOG}`);
+    console.error('  أرسله كما هو ليُعرف السبب.\n');
+
+    process.exit(1);
+  });

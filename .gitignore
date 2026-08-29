@@ -24,3 +24,4 @@ tsconfig.tsbuildinfo
 
 # نسخة البيانات المنقولة — تحوي تجزئة كلمة مرور المدير وبيانات العملاء
 /data-export.json
+/setup-log.txt
