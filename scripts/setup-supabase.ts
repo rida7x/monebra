@@ -304,9 +304,6 @@ async function main() {
 
   // ── ٤ · المخطّط ──
   step(4, 'بناء الجداول على Supabase');
-  say('  (ترحيلات SQLite لا تعمل على PostgreSQL — نبني واحدًا نظيفًا)');
-
-  await rm('prisma/migrations', { recursive: true, force: true });
 
   const run = (cmd: string) =>
     execSync(cmd, {
@@ -314,7 +311,17 @@ async function main() {
       env: { ...process.env, DATABASE_URL: url },
     });
 
-  run('npx prisma migrate dev --name init --skip-seed');
+  /**
+   * ⚠️ `db push` لا `migrate dev`، لسببين:
+   *
+   *  1. `migrate dev` ينشئ **قاعدة ظل** مؤقتة ليحسب الفروق، وحساب Supabase
+   *     الافتراضي لا يملك صلاحية إنشاء قواعد — فيفشل بخطأ صلاحيات غامض.
+   *  2. `migrate dev` يشغّل ملف البذرة بعد النجاح، فيزرع منتجات تجريبية
+   *     قبل أن ننقل منتجات التاجر الحقيقية — ثم يتضاربان.
+   *
+   * `db push` يبني الجداول من المخطّط مباشرة: بلا قاعدة ظل وبلا بذر.
+   */
+  run('npx prisma db push');
   run('npx prisma generate');
 
   // ── ٥ · البيانات ──
@@ -346,6 +353,11 @@ async function main() {
   } finally {
     await check.end();
   }
+
+  // ترحيلات SQLite لا تعمل على PostgreSQL (أنواع مختلفة). تُحذف **هنا**
+  // لا قبل البناء: الحذف المبكر كان يفقدها عند أي فشل لاحق، فيبقى المشروع
+  // بلا ترحيلات ولا قاعدة جديدة.
+  await rm('prisma/migrations', { recursive: true, force: true });
 
   say('\n\x1b[1;32m  ✓ تمّ. المتجر الآن على Supabase.\x1b[0m');
   say('  شغّل: npm run build && npm start\n');
