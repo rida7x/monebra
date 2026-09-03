@@ -7,6 +7,7 @@ import {
   getProductBySlug,
   getRelatedProducts,
   getApprovedReviews,
+  getRatingBreakdown,
 } from '@/lib/services/product-detail';
 import { prisma } from '@/lib/db';
 import { decodeSlug } from '@/lib/utils';
@@ -111,9 +112,10 @@ export default async function ProductPage({ params }: PageProps) {
       )?.id ?? null
     : null;
 
-  const [related, reviews] = await Promise.all([
+  const [related, firstReviews, breakdown] = await Promise.all([
     getRelatedProducts(product.id, categoryId, product.gender, 4),
     getApprovedReviews(product.id),
+    getRatingBreakdown(product.id),
   ]);
 
   const currency = {
@@ -394,7 +396,9 @@ export default async function ProductPage({ params }: PageProps) {
       {/* ── التقييمات ── */}
       <ProductReviews
         productId={product.id}
-        reviews={reviews}
+        initialReviews={firstReviews.reviews}
+        initialHasMore={firstReviews.hasMore}
+        breakdown={breakdown}
         average={product.ratingAverage}
         count={product.ratingCount}
       />

@@ -16,6 +16,7 @@ type ReviewRow = {
   comment: string | null;
   status: string;
   createdAt: Date;
+  verifiedPurchase: boolean;
   product: { id: string; name: string; slug: string };
 };
 
@@ -146,6 +147,14 @@ export function ReviewsManager({ reviews }: { reviews: ReviewRow[] }) {
                       className="tabular ms-2 text-xs font-normal text-[var(--text-muted)]"
                     >
                       {formatPhone(review.phone)}
+                    </span>
+                  ) : null}
+
+                  {/* يفرّق للمدير بين رأي مشترٍ ورأي زائر — التقييم مفتوح
+                      للجميع، والوسم يُرفع تلقائيًا عند مطابقة طلب */}
+                  {review.verifiedPurchase ? (
+                    <span className="ms-2 rounded-full bg-[var(--accent)]/12 px-2 py-0.5 text-[0.65rem] font-normal text-[var(--accent)]">
+                      شراء موثّق
                     </span>
                   ) : null}
                 </p>

@@ -619,11 +619,27 @@ model Review {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  /// شراء موثّق: يُرفع تلقائيًا حين يُطابق هاتف المُقيِّم طلبًا لهذا المنتج.
+  /// التقييم المفتوح لا يشترطه، لكن وسمه يفرّق للعميل بين رأي مشترٍ ورأي زائر.
+  verifiedPurchase Boolean @default(false)
+
+  /// بصمة عنوان الزائر — SHA-256 مملّحة بـ AUTH_SECRET، لا العنوان نفسه.
+  /// تكفي لكشف التكرار من نفس المصدر ولا تُرجِع العنوان الأصلي.
+  ipHash String?
+
+  /// عدّاد «مفيد» — العدّ هنا لا في جدول منفصل: العدد وحده هو ما يُعرض،
+  /// وجدول أصوات كامل يضاعف الكتابة بلا فائدة ظاهرة للعميل.
+  helpfulCount Int @default(0)
+
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   @@index([productId, status])
   @@index([status, createdAt])
+  /// الفلترة بالنجوم داخل صفحة منتج — بدونه مسح كامل لكل تقييمات المنتج
+  @@index([productId, status, rating])
+  /// كشف التكرار من نفس المصدر على نفس المنتج
+  @@index([productId, ipHash])
   @@map("reviews")
 }
 

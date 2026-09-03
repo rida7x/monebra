@@ -266,23 +266,73 @@ export async function recordProductView(productId: string): Promise<void> {
   }
 }
 
+/** عدد التقييمات في كل دفعة — أول صفحة تُرسَل مع الصفحة نفسها */
+export const REVIEWS_PAGE_SIZE = 6;
+
 /**
- * التقييمات المعتمدة لمنتج.
+ * التقييمات المعتمدة لمنتج، صفحةً صفحة.
  *
- * لا نعيد رقم الهاتف أبدًا — يُستخدم للتحقق من الشراء ومنع التكرار فقط،
- * وإرساله للمتصفح تسريب لبيانات العميل.
+ * ⚠️ لا نعيد رقم الهاتف ولا `ipHash` أبدًا. الأول بيان شخصي، والثاني بصمة
+ * تسمح بربط تقييمات نفس الزائر عبر المنتجات لو تسرّبت — وكلاهما لا يحتاجه
+ * المتصفح.
+ *
+ * `take: 20` الثابت السابق كان يبتر التقييمات بصمت بعد العشرين ولا يخبر
+ * أحدًا. الترقيم هنا يعيد `hasMore` كي تعرف الواجهة أن هناك المزيد.
  */
-export const getApprovedReviews = cache(async (productId: string) => {
-  return prisma.review.findMany({
-    where: { productId, status: 'approved' },
+export async function getApprovedReviews(
+  productId: string,
+  options: { skip?: number; rating?: number | null } = {},
+) {
+  const { skip = 0, rating = null } = options;
+
+  const where = {
+    productId,
+    status: 'approved',
+    ...(rating ? { rating } : {}),
+  };
+
+  const rows = await prisma.review.findMany({
+    where,
     orderBy: { createdAt: 'desc' },
-    take: 20,
+    skip,
+    // واحد زائد: وجوده يعني أن هناك صفحة تالية، بلا استعلام عدّ ثانٍ
+    take: REVIEWS_PAGE_SIZE + 1,
     select: {
       id: true,
       customerName: true,
       rating: true,
       comment: true,
       createdAt: true,
+      verifiedPurchase: true,
+      helpfulCount: true,
     },
   });
+
+  return {
+    reviews: rows.slice(0, REVIEWS_PAGE_SIZE),
+    hasMore: rows.length > REVIEWS_PAGE_SIZE,
+  };
+}
+
+export type ReviewRow = Awaited<
+  ReturnType<typeof getApprovedReviews>
+>['reviews'][number];
+
+/**
+ * توزيع النجوم — كم تقييمًا لكل درجة.
+ *
+ * استعلام تجميع واحد بدل خمسة استعلامات عدّ. الدرجات الغائبة لا تعود من
+ * `groupBy` أصلًا، فنملأها بأصفار كي تبقى الأشرطة الخمسة ظاهرة دائمًا.
+ */
+export const getRatingBreakdown = cache(async (productId: string) => {
+  const rows = await prisma.review.groupBy({
+    by: ['rating'],
+    where: { productId, status: 'approved' },
+    _count: { rating: true },
+  });
+
+  const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const row of rows) counts[row.rating] = row._count.rating;
+
+  return counts;
 });
