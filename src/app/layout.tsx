@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { IBM_Plex_Sans_Arabic, Cormorant_Garamond } from 'next/font/google';
+import { IBM_Plex_Sans_Arabic, Cormorant_Garamond, Cairo } from 'next/font/google';
 import { getSettings } from '@/lib/settings';
 import { THEME_COLORS, THEME_INIT_SCRIPT } from '@/lib/theme';
 import './globals.css';
@@ -26,6 +26,23 @@ const cormorant = Cormorant_Garamond({
   subsets: ['latin'],
   weight: ['300', '400', '600'],
   variable: '--font-cormorant',
+  display: 'swap',
+  preload: false,
+});
+
+/**
+ * Cairo — لشريط وعد المطابقة وحده.
+ *
+ * ⚠️ `preload: false` مقصود: الشريط يظهر في صفحات الأقسام فقط، وتحميله
+ * مسبقًا على **كل** صفحة يضيف ≈٤٨ ك.ب لكل وزن على زائر لن يراه غالبًا —
+ * وجمهور المتجر على شبكات هاتف ضعيفة. وزنان فقط لنفس السبب.
+ */
+const cairo = Cairo({
+  subsets: ['arabic', 'latin'],
+  weight: ['400', '700'],
+  // الاسم `-src` لأن `--font-cairo` في globals.css هو المكدّس الكامل مع
+  // الاحتياطي، وتسميتهما واحدًا يجعل المتغيّر يشير إلى نفسه فيسقط الخط
+  variable: '--font-cairo-src',
   display: 'swap',
   preload: false,
 });
@@ -101,7 +118,7 @@ export default function RootLayout({
     <html
       lang="ar"
       dir="rtl"
-      className={`${plexArabic.variable} ${cormorant.variable}`}
+      className={`${plexArabic.variable} ${cormorant.variable} ${cairo.variable}`}
       suppressHydrationWarning
     >
       <head>

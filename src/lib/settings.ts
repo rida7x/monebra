@@ -113,7 +113,7 @@ export const DEFAULT_SETTINGS: StoreSettings = {
     'جميع عطورنا من إنتاج Monebra Perfume ومستوحاة من روائح عالمية معروفة. ' +
     'أسماء العلامات التجارية المذكورة تعود لأصحابها، ولا نمثّلها ولا ننتسب إليها.',
   footerNote: '',
-  categoryPromise: 'في مونيبرا تطابق العطور أعلى من ٩٠٪',
+  categoryPromise: 'في مونيبرا تطابق العطور أعلى من 90%',
 
   metaTitle: '',
   metaDescription: '',

@@ -10,6 +10,8 @@
   /* ── الخطوط ── */
   --font-sans: var(--font-plex-arabic), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-cormorant), var(--font-plex-arabic), serif;
+  /* لشريط وعد المطابقة — لا يُحمَّل إلا في صفحات الأقسام */
+  --font-cairo: var(--font-cairo-src), var(--font-plex-arabic), sans-serif;
 
   /* ── الألوان الأساسية ── */
   --color-ink-950: #08080a;
