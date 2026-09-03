@@ -263,6 +263,42 @@ export const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
   hidden: 'مخفي',
 };
 
+/**
+ * أيقونات التصنيفات — قائمة مغلقة.
+ *
+ * المفتاح يُخزَّن في قاعدة البيانات، والاسم العربي يظهر للمدير عند الاختيار.
+ * ⚠️ لا تحذف مفتاحًا استُخدم من قبل: التصنيف الذي يشير إليه يفقد أيقونته
+ * بصمت. الإضافة آمنة دائمًا، والحذف يحتاج تحديث التصنيفات أولًا.
+ */
+export const CATEGORY_ICONS = {
+  sparkles: 'بريق',
+  flower: 'زهرة',
+  leaf: 'ورقة',
+  citrus: 'حمضيات',
+  droplet: 'قطرة',
+  flame: 'لهب',
+  sun: 'شمس',
+  moon: 'قمر',
+  snowflake: 'ثلج',
+  wind: 'نسيم',
+  tree: 'خشب',
+  crown: 'تاج',
+  gem: 'جوهرة',
+  heart: 'قلب',
+  star: 'نجمة',
+  package: 'باقة',
+} as const;
+
+export type CategoryIconKey = keyof typeof CATEGORY_ICONS;
+
+export const CATEGORY_ICON_KEYS = Object.keys(
+  CATEGORY_ICONS,
+) as CategoryIconKey[];
+
+export function isCategoryIcon(value: unknown): value is CategoryIconKey {
+  return typeof value === 'string' && value in CATEGORY_ICONS;
+}
+
 export const PAYMENT_METHODS = ['cod', 'mobicash', 'edfali'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 

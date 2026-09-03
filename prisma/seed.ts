@@ -50,17 +50,18 @@ const CITIES = [
   'نالوت',
 ];
 
+/** الأيقونات مفاتيح من `CATEGORY_ICONS` — انظر src/lib/constants.ts */
 const CATEGORIES = [
-  { name: 'عطور رجالية', slug: 'men' },
-  { name: 'عطور نسائية', slug: 'women' },
-  { name: 'عطور للجنسين', slug: 'unisex' },
-  { name: 'الأكثر مبيعًا', slug: 'best-sellers' },
-  { name: 'وصل حديثًا', slug: 'new-arrivals' },
-  { name: 'العروض', slug: 'offers' },
-  { name: 'الباقات', slug: 'bundles' },
-  { name: 'عطور قوية وثابتة', slug: 'long-lasting' },
-  { name: 'عطور صيفية', slug: 'summer' },
-  { name: 'عطور شتوية', slug: 'winter' },
+  { name: 'عطور رجالية', slug: 'men', icon: 'wind' },
+  { name: 'عطور نسائية', slug: 'women', icon: 'flower' },
+  { name: 'عطور للجنسين', slug: 'unisex', icon: 'droplet' },
+  { name: 'الأكثر مبيعًا', slug: 'best-sellers', icon: 'crown' },
+  { name: 'وصل حديثًا', slug: 'new-arrivals', icon: 'sparkles' },
+  { name: 'العروض', slug: 'offers', icon: 'gem' },
+  { name: 'الباقات', slug: 'bundles', icon: 'package' },
+  { name: 'عطور قوية وثابتة', slug: 'long-lasting', icon: 'flame' },
+  { name: 'عطور صيفية', slug: 'summer', icon: 'sun' },
+  { name: 'عطور شتوية', slug: 'winter', icon: 'snowflake' },
 ];
 
 const CONTENT_PAGES = [

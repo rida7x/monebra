@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Plus, Trash2, Loader2, Pencil, X, Tags, Eye, EyeOff } from 'lucide-react';
 import { Field, Toggle, inputClass, textareaClass } from '@/components/admin/form';
+import { CategoryIcon } from '@/components/ui/CategoryIcon';
+import { CATEGORY_ICONS, CATEGORY_ICON_KEYS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 type CategoryRow = {
@@ -11,6 +13,7 @@ type CategoryRow = {
   name: string;
   slug: string;
   description: string | null;
+  icon: string | null;
   isActive: boolean;
   sortOrder: number;
   productCount: number;
@@ -154,6 +157,7 @@ function CategoryEditor({
   const [name, setName] = useState(category?.name ?? '');
   const [slug, setSlug] = useState(category?.slug ?? '');
   const [description, setDescription] = useState(category?.description ?? '');
+  const [icon, setIcon] = useState<string>(category?.icon ?? 'sparkles');
   const [isActive, setIsActive] = useState(category?.isActive ?? true);
   const [sortOrder, setSortOrder] = useState(
     String(category?.sortOrder ?? 0),
@@ -182,6 +186,7 @@ function CategoryEditor({
           name: name.trim(),
           slug: slug.trim() || undefined,
           description: description.trim() || null,
+          icon,
           isActive,
           sortOrder: Number(sortOrder) || 0,
         }),
@@ -245,6 +250,36 @@ function CategoryEditor({
         >
           <X size={16} aria-hidden />
         </button>
+      </div>
+
+      {/* ── الأيقونة ──
+          شبكة مرئية لا قائمة أسماء: المدير يختار بالعين، والاسم وحده
+          («بريق»، «نسيم») لا يخبره كيف سيبدو في الواجهة. */}
+      <div className="mb-4">
+        <p className="mb-2 text-xs font-semibold text-[var(--text-muted)]">
+          الأيقونة
+        </p>
+
+        <div className="flex flex-wrap gap-2">
+          {CATEGORY_ICON_KEYS.map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setIcon(value)}
+              title={CATEGORY_ICONS[value]}
+              aria-label={CATEGORY_ICONS[value]}
+              aria-pressed={icon === value}
+              className={cn(
+                'flex h-11 w-11 items-center justify-center rounded-lg border transition-colors',
+                icon === value
+                  ? 'border-[var(--accent)] bg-[var(--accent)]/12 text-[var(--accent)]'
+                  : 'border-[var(--surface-border)] text-[var(--text-secondary)] hover:border-[var(--surface-border-strong)]',
+              )}
+            >
+              <CategoryIcon icon={value} size={19} />
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">

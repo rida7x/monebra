@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { requireAdmin, UnauthorizedError, ForbiddenError } from '@/lib/auth';
 import { invalidateCategories, invalidateProduct } from '@/lib/cache';
 import { slugify } from '@/lib/utils';
+import { isCategoryIcon } from '@/lib/constants';
 import { logError } from '@/lib/logger';
 
 /**
@@ -21,6 +22,15 @@ const Schema = z.object({
   description: z.string().trim().max(500).nullish(),
   isActive: z.boolean(),
   sortOrder: z.number().int().min(0).max(9999).optional(),
+  /**
+   * مفتاح من `CATEGORY_ICONS` فقط. لا نقبل اسمًا حرًا: القيمة تُستخدم
+   * لاختيار مكوّن من جدول مغلق، وأي مفتاح خارجه يسقط إلى الأيقونة
+   * الافتراضية بصمت — فيظنّ المدير أن حفظه لم ينجح.
+   */
+  icon: z
+    .string()
+    .refine(isCategoryIcon, 'أيقونة غير معروفة')
+    .nullish(),
 });
 
 export async function POST(request: NextRequest) {
@@ -46,6 +56,7 @@ export async function POST(request: NextRequest) {
             name: data.name,
             slug,
             description: data.description || null,
+            icon: data.icon || null,
             isActive: data.isActive,
             ...(data.sortOrder !== undefined ? { sortOrder: data.sortOrder } : {}),
           },
@@ -56,6 +67,7 @@ export async function POST(request: NextRequest) {
             name: data.name,
             slug,
             description: data.description || null,
+            icon: data.icon || null,
             isActive: data.isActive,
             sortOrder: data.sortOrder ?? 0,
           },

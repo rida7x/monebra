@@ -429,6 +429,20 @@ export function SettingsForm({ settings }: { settings: StoreSettings }) {
                 className={inputClass}
               />
             </Field>
+
+            <Field
+              label="وعد المطابقة"
+              htmlFor="categoryPromise"
+              hint="شريط يظهر أعلى كل صفحة قسم. اتركه فارغًا لإخفائه."
+            >
+              <input
+                id="categoryPromise"
+                value={values.categoryPromise}
+                onChange={(event) => set('categoryPromise', event.target.value)}
+                maxLength={120}
+                className={inputClass}
+              />
+            </Field>
           </div>
         </FormSection>
 

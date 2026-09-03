@@ -183,6 +183,7 @@ export const getActiveCategories = cache(async () => {
       name: true,
       slug: true,
       image: true,
+      icon: true,
       description: true,
       _count: { select: { products: { where: { isActive: true } } } },
     },
@@ -193,9 +194,42 @@ export const getActiveCategories = cache(async () => {
     name: category.name,
     slug: category.slug,
     image: category.image,
+    icon: category.icon,
     description: category.description,
     productCount: category._count.products,
   }));
+});
+
+/**
+ * تقييم المتجر كله — مجمَّع من تقييمات المنتجات المعتمدة.
+ *
+ * ⚠️ لا رقم مستقل ولا مصدر ثانٍ: المتوسط هنا هو نفسه متوسط ما يراه العميل
+ * في صفحات المنتجات. أي رقم آخر يعني وعدًا لا تسنده بيانات — وهو ما رفضه
+ * صاحب المتجر صراحةً («ممنوع توليد تقييمات وهمية»).
+ *
+ * `null` حين لا تقييمات: الواجهة تُخفي الشريط كليًا بدل عرض صفر أو خمس
+ * نجوم فارغة.
+ */
+export const getStoreRating = cache(async () => {
+  const [summary, productsRated] = await Promise.all([
+    prisma.review.aggregate({
+      where: { status: 'approved' },
+      _avg: { rating: true },
+      _count: true,
+    }),
+    prisma.review.groupBy({
+      by: ['productId'],
+      where: { status: 'approved' },
+    }),
+  ]);
+
+  if (summary._count === 0 || summary._avg.rating === null) return null;
+
+  return {
+    average: summary._avg.rating,
+    count: summary._count,
+    productCount: productsRated.length,
+  };
 });
 
 /** شرائح الواجهة الرئيسية — يديرها المدير من لوحة التحكم */

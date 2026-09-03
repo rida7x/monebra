@@ -75,6 +75,12 @@ model Category {
   slug            String   @unique
   description     String?
   image           String?
+
+  /// مفتاح أيقونة من `CATEGORY_ICONS` — قائمة مغلقة لا اسم حر.
+  /// الاسم الحر يعني استيرادًا ديناميكيًا لكل أيقونات lucide في الحزمة،
+  /// وقائمة مغلقة تُبقي ما يُشحن محصورًا فيما يُستخدم فعلًا.
+  icon            String?
+
   parentId        String?
   sortOrder       Int      @default(0)
   isActive        Boolean  @default(true)

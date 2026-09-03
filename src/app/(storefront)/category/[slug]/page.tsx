@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Suspense, cache } from 'react';
-import { PackageSearch } from 'lucide-react';
+import { PackageSearch, BadgeCheck } from 'lucide-react';
 import { prisma } from '@/lib/db';
 import { decodeSlug } from '@/lib/utils';
 import { getSettings } from '@/lib/settings';
@@ -108,6 +108,15 @@ export default async function CategoryPage({
 
   return (
     <main className="container-page py-10 sm:py-14">
+      {/* وعد المطابقة — نصّه في الإعدادات لا في الكود، فتركه فارغًا يُخفيه.
+          الرقم دعاية يتغيّر، وبقاؤه بيد صاحب المتجر شرط لا رفاهية. */}
+      {settings.categoryPromise ? (
+        <p className="mb-6 flex items-center justify-center gap-2 rounded-full border border-[var(--accent)]/30 bg-[var(--accent)]/8 px-5 py-2.5 text-center text-sm font-medium text-[var(--accent)]">
+          <BadgeCheck size={16} aria-hidden className="shrink-0" />
+          {settings.categoryPromise}
+        </p>
+      ) : null}
+
       <header className="mb-8">
         <h1 className="text-3xl font-semibold sm:text-4xl">{category.name}</h1>
 

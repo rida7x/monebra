@@ -56,6 +56,15 @@ export type StoreSettings = {
   inspiredDisclaimer: string;
   footerNote: string;
 
+  /**
+   * شريط يظهر أعلى كل صفحة قسم — وعد المتجر عن دقّة المطابقة.
+   *
+   * ⚠️ في الإعدادات لا في الكود: هذه **دعاية برقم**، وأي رقم معروض يجب أن
+   * يبقى بيد صاحب المتجر ليصحّحه أو يزيله متى تغيّر. تركه فارغًا يُخفي
+   * الشريط كليًا.
+   */
+  categoryPromise: string;
+
   // SEO
   metaTitle: string;
   metaDescription: string;
@@ -104,6 +113,7 @@ export const DEFAULT_SETTINGS: StoreSettings = {
     'جميع عطورنا من إنتاج Monebra Perfume ومستوحاة من روائح عالمية معروفة. ' +
     'أسماء العلامات التجارية المذكورة تعود لأصحابها، ولا نمثّلها ولا ننتسب إليها.',
   footerNote: '',
+  categoryPromise: 'في مونيبرا تطابق العطور أعلى من ٩٠٪',
 
   metaTitle: '',
   metaDescription: '',

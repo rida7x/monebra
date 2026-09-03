@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { Truck, ShieldCheck, Headphones, Gem } from 'lucide-react';
+import { Truck, ShieldCheck, Headphones, Gem, Star } from 'lucide-react';
 import { prisma } from '@/lib/db';
 import { getSettings } from '@/lib/settings';
 import { PAYMENT_METHOD_LABELS } from '@/lib/constants';
@@ -10,9 +10,11 @@ import {
   getNewArrivals,
   getHeroSlides,
   getActiveCategories,
+  getStoreRating,
 } from '@/lib/services/catalog';
 import { ProductGrid } from '@/components/product/ProductCard';
 import { SectionHeading } from '@/components/ui/primitives';
+import { CategoryIcon } from '@/components/ui/CategoryIcon';
 
 /**
  * تُبنى الصفحة مسبقًا وتُحدَّث كل دقيقتين — أسرع بكثير على الشبكات الضعيفة
@@ -38,6 +40,7 @@ export default async function HomePage() {
     bestSellers,
     newArrivals,
     activeCityCount,
+    storeRating,
   ] = await Promise.all([
     getSettings(),
     getHeroSlides(),
@@ -46,6 +49,7 @@ export default async function HomePage() {
     getBestSellers(4),
     getNewArrivals(4),
     prisma.city.count({ where: { isActive: true } }),
+    getStoreRating(),
   ]);
 
   const hero = slides[0];
@@ -54,9 +58,14 @@ export default async function HomePage() {
     decimals: settings.currencyDecimals,
   };
 
-  const visibleCategories = categories.filter(
-    (category) => category.productCount > 0,
-  );
+  /**
+   * كل الأقسام المفعّلة تظهر — لا تلك التي فيها منتجات فقط.
+   *
+   * ⚠️ الإخفاء التلقائي عند `productCount === 0` كان ينزع من صاحب المتجر
+   * تحكّمه: يضيف قسمًا جديدًا فلا يظهر، بلا سبب مفهوم، حتى يملأه بمنتجات.
+   * المفتاح الآن واحد وصريح: `isActive` في `/admin/categories`.
+   */
+  const visibleCategories = categories;
 
   return (
     <main>
@@ -182,28 +191,82 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ═══════════════════ التصنيفات ═══════════════════ */}
+      {/* ═══════════════════ التصنيفات ═══════════════════
+          بطاقات بأيقونات مباشرة تحت الواجهة: القسم هو أول قرار يتخذه
+          الزائر، ودفنه أسفل الصفحة يجعله يمرّر بحثًا عمّا يريد. الشبكة
+          عمودان على الهاتف — لمسة واحدة تكفي، بلا تمرير أفقي يخفي نصفها. */}
       {visibleCategories.length > 0 ? (
-        <section className="container-page py-16 sm:py-20">
+        <section className="container-page py-14 sm:py-16">
           <SectionHeading
             title="تصفّح المجموعات"
             subtitle="اختر ما يناسب ذوقك ومناسبتك"
             align="center"
           />
 
-          <div className="scrollbar-none -mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:justify-center sm:px-0">
+          <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {visibleCategories.map((category) => (
               <Link
                 key={category.id}
                 href={`/category/${category.slug}`}
-                className="glass tap-target inline-flex shrink-0 items-center gap-2 rounded-full px-5 text-sm transition-all duration-300 ease-[var(--ease-luxe)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                className="surface-card group flex flex-col items-center gap-3 p-5 text-center transition-all duration-300 ease-[var(--ease-luxe)] hover:border-[var(--accent)] hover:shadow-[var(--shadow-lift)]"
               >
-                <span>{category.name}</span>
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--surface-sunken)] text-[var(--accent)] transition-transform duration-300 group-hover:scale-110">
+                  <CategoryIcon icon={category.icon} size={22} />
+                </span>
+
+                <span className="text-sm font-semibold leading-snug">
+                  {category.name}
+                </span>
+
+                {/* القسم الفارغ يقول «قريبًا» لا «٠ عطور»: الصفر يقرأ
+                    كعطب، و«قريبًا» يقرأ كوعد — والوجهة واحدة. */}
                 <span className="tabular text-xs text-[var(--text-muted)]">
-                  {category.productCount}
+                  {category.productCount === 0
+                    ? 'قريبًا'
+                    : `${category.productCount} ${category.productCount === 1 ? 'عطر' : 'عطور'}`}
                 </span>
               </Link>
             ))}
+          </div>
+        </section>
+      ) : null}
+
+      {/* ═══════════════════ تقييم المتجر ═══════════════════
+          مجمَّع من تقييمات المنتجات المعتمدة — لا رقم مستقل. بلا تقييمات
+          لا يظهر الشريط أصلًا: نجوم فارغة أسوأ من لا شيء. */}
+      {storeRating ? (
+        <section className="border-y border-[var(--surface-border)] bg-[var(--surface-sunken)]">
+          <div className="container-page flex flex-wrap items-center justify-center gap-x-6 gap-y-3 py-8 text-center">
+            <div className="flex items-center gap-3">
+              <span className="tabular font-display text-4xl leading-none text-[var(--accent)]">
+                {storeRating.average.toFixed(1)}
+              </span>
+
+              <span
+                className="flex gap-0.5 text-[var(--accent)]"
+                role="img"
+                aria-label={`${storeRating.average.toFixed(1)} من ٥`}
+              >
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star
+                    key={star}
+                    size={16}
+                    aria-hidden
+                    className={
+                      star <= Math.round(storeRating.average)
+                        ? 'fill-current'
+                        : 'fill-transparent opacity-30'
+                    }
+                  />
+                ))}
+              </span>
+            </div>
+
+            <p className="text-sm text-[var(--text-secondary)]">
+              رأي <span className="tabular">{storeRating.count}</span> عميل في{' '}
+              <span className="tabular">{storeRating.productCount}</span>{' '}
+              {storeRating.productCount === 1 ? 'عطر' : 'عطور'} من مونيبرا
+            </p>
           </div>
         </section>
       ) : null}
