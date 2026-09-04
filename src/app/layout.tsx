@@ -1,48 +1,37 @@
 import type { Metadata, Viewport } from 'next';
-import { IBM_Plex_Sans_Arabic, Cormorant_Garamond, Cairo } from 'next/font/google';
+import { Cormorant_Garamond, Cairo } from 'next/font/google';
 import { getSettings } from '@/lib/settings';
 import { THEME_COLORS, THEME_INIT_SCRIPT } from '@/lib/theme';
 import './globals.css';
 
 /**
- * ⚠️ كل وزن هنا يكلّف ملفّين (عربي ولاتيني) ≈ 48 ك.ب، وكلها تُحمَّل مسبقًا
- * على **كل** صفحة. الخط الأثقل حِملًا على شبكة ضعيفة — وهو جمهور المتجر
- * الأساسي — فلا نضيف وزنًا ما لم يكن له أثر مرئي حقيقي.
+ * Cairo — خط المتجر كله.
+ *
+ * ⚠️ كل وزن يكلّف ملفّين (عربي ولاتيني) ≈ 48 ك.ب تُحمَّل مسبقًا على **كل**
+ * صفحة. الخط الأثقل حِملًا على شبكة ضعيفة — وهو جمهور المتجر الأساسي —
+ * فلا يُضاف وزن ما لم يكن له أثر مرئي حقيقي.
  *
  * 300 للعنوان الرئيسي (الوزن الخفيف بحجم كبير = مظهر فاخر)، و400 للنص،
- * و600 للعناوين والأزرار، و700 للأرقام البارزة. الوزن 500 حُذف: فرقه عن
- * 400 و600 لا يكاد يُرى في النصوص الصغيرة التي كان يُستخدم فيها.
+ * و600 للعناوين والأزرار، و700 للأرقام البارزة.
+ *
+ * ⚠️ حلّ محل IBM Plex Sans Arabic ولم يُضَف فوقه: خطان عربيان محمَّلان
+ * معًا يضاعفان الحِمل بلا أن يرى الزائر إلا واحدًا.
  */
-const plexArabic = IBM_Plex_Sans_Arabic({
+const cairo = Cairo({
   subsets: ['arabic', 'latin'],
   weight: ['300', '400', '600', '700'],
-  variable: '--font-plex-arabic',
+  // الاسم `-src` لأن `--font-cairo` في globals.css هو المكدّس الكامل مع
+  // الاحتياطي، وتسميتهما واحدًا يجعل المتغيّر يشير إلى نفسه فيسقط الخط
+  variable: '--font-cairo-src',
   display: 'swap',
   preload: true,
 });
 
-/** خط زخرفي للاتينية فقط، لا يُحمَّل مسبقًا. 500 كان بلا استخدام. */
+/** خط زخرفي للاتينية فقط، لا يُحمَّل مسبقًا. */
 const cormorant = Cormorant_Garamond({
   subsets: ['latin'],
   weight: ['300', '400', '600'],
   variable: '--font-cormorant',
-  display: 'swap',
-  preload: false,
-});
-
-/**
- * Cairo — لشريط وعد المطابقة وحده.
- *
- * ⚠️ `preload: false` مقصود: الشريط يظهر في صفحات الأقسام فقط، وتحميله
- * مسبقًا على **كل** صفحة يضيف ≈٤٨ ك.ب لكل وزن على زائر لن يراه غالبًا —
- * وجمهور المتجر على شبكات هاتف ضعيفة. وزنان فقط لنفس السبب.
- */
-const cairo = Cairo({
-  subsets: ['arabic', 'latin'],
-  weight: ['400', '700'],
-  // الاسم `-src` لأن `--font-cairo` في globals.css هو المكدّس الكامل مع
-  // الاحتياطي، وتسميتهما واحدًا يجعل المتغيّر يشير إلى نفسه فيسقط الخط
-  variable: '--font-cairo-src',
   display: 'swap',
   preload: false,
 });
@@ -118,7 +107,7 @@ export default function RootLayout({
     <html
       lang="ar"
       dir="rtl"
-      className={`${plexArabic.variable} ${cormorant.variable} ${cairo.variable}`}
+      className={`${cairo.variable} ${cormorant.variable}`}
       suppressHydrationWarning
     >
       <head>

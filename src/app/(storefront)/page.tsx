@@ -15,6 +15,7 @@ import {
 import { ProductGrid } from '@/components/product/ProductCard';
 import { SectionHeading } from '@/components/ui/primitives';
 import { CategoryIcon } from '@/components/ui/CategoryIcon';
+import { BrandLogo } from '@/components/layout/BrandLogo';
 
 /**
  * تُبنى الصفحة مسبقًا وتُحدَّث كل دقيقتين — أسرع بكثير على الشبكات الضعيفة
@@ -70,7 +71,9 @@ export default async function HomePage() {
   return (
     <main>
       {/* ═══════════════════════ Hero ═══════════════════════ */}
-      <section className="relative -mt-16 flex min-h-[92svh] items-center overflow-hidden sm:-mt-20">
+      {/* الارتفاع طبيعي لا `92svh`: الواجهة بارتفاع شاشة كاملة كانت تدفع
+          الأقسام تحت الطيّة، فيمرّر الزائر قبل أن يرى ما يبيعه المتجر. */}
+      <section className="relative -mt-16 flex items-center overflow-hidden sm:-mt-20">
         {/* الخلفية */}
         {hero?.mediaUrl ? (
           hero.mediaType === 'video' ? (
@@ -105,24 +108,59 @@ export default async function HomePage() {
           className="absolute inset-0 bg-gradient-to-t from-[var(--surface-base)] via-[var(--surface-base)]/55 to-[var(--surface-base)]/85"
         />
 
-        <div className="container-page relative w-full pt-28 pb-20 text-center sm:pt-36">
-          <p className="mb-5 text-[0.7rem] tracking-[0.4em] text-[var(--accent)] uppercase">
-            Perfume
-          </p>
-
-          <h1 className="font-display text-5xl font-light leading-[1.1] tracking-wide sm:text-7xl lg:text-8xl">
-            <span className="text-gold-gradient">
-              {hero?.title ?? settings.storeName}
-            </span>
-          </h1>
+        <div className="container-page relative w-full pt-24 pb-14 text-center sm:pt-28">
+          {/* الشعار بدل الاسم المكتوب: هو أول ما يجب أن تراه العين، وصورته
+              أدلّ على العلامة من نصّها. */}
+          <BrandLogo
+            storeName={settings.storeName}
+            logoUrl={settings.logoUrl}
+            logoUrlLight={settings.logoUrlLight}
+            width={260}
+            height={70}
+            priority
+            className="mx-auto h-14 w-auto object-contain sm:h-16"
+            fallbackClassName="font-display text-4xl font-light tracking-wide text-gold-gradient sm:text-5xl"
+          />
 
           {(hero?.subtitle ?? settings.storeTagline) ? (
-            <p className="mx-auto mt-6 max-w-xl text-base leading-relaxed text-[var(--text-secondary)] sm:text-lg">
+            <p className="mx-auto mt-5 max-w-xl text-sm leading-relaxed text-[var(--text-secondary)] sm:text-base">
               {hero?.subtitle ?? settings.storeTagline}
             </p>
           ) : null}
 
-          <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
+          {/* ── الأقسام ──
+              هنا لا أسفل الصفحة: القسم أول قرار يتخذه الزائر، ووضعه خلف
+              واجهة بارتفاع شاشة كاملة يعني تمريرًا قبل أن يرى ما يبيعه
+              المتجر أصلًا. الشبكة عمودان على الهاتف — لمسة واحدة تكفي. */}
+          {visibleCategories.length > 0 ? (
+            <div className="mt-10 grid grid-cols-2 gap-3 text-start sm:mt-12 sm:grid-cols-3 lg:grid-cols-4">
+              {visibleCategories.map((category) => (
+                <Link
+                  key={category.id}
+                  href={`/category/${category.slug}`}
+                  className="glass group flex flex-col items-center gap-3 rounded-2xl p-5 text-center transition-all duration-300 ease-[var(--ease-luxe)] hover:border-[var(--accent)] hover:shadow-[var(--shadow-lift)]"
+                >
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--accent)]/12 text-[var(--accent)] transition-transform duration-300 group-hover:scale-110">
+                    <CategoryIcon icon={category.icon} size={22} />
+                  </span>
+
+                  <span className="text-sm font-semibold leading-snug">
+                    {category.name}
+                  </span>
+
+                  {/* القسم الفارغ يقول «قريبًا» لا «٠ عطور»: الصفر يقرأ
+                      كعطب، و«قريبًا» يقرأ كوعد — والوجهة واحدة. */}
+                  <span className="tabular text-xs text-[var(--text-muted)]">
+                    {category.productCount === 0
+                      ? 'قريبًا'
+                      : `${category.productCount} ${category.productCount === 1 ? 'عطر' : 'عطور'}`}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
             {hero?.ctaText && hero.ctaLink ? (
               <Link
                 href={hero.ctaLink}
@@ -135,7 +173,7 @@ export default async function HomePage() {
                 href="/products"
                 className="tap-target inline-flex w-full items-center justify-center rounded-full bg-[var(--accent)] px-10 text-sm font-semibold text-[var(--accent-contrast)] transition-all duration-300 hover:bg-[var(--accent-hover)] sm:w-auto"
               >
-                تسوّق الآن
+                تسوّق كل العطور
               </Link>
             )}
 
@@ -190,46 +228,6 @@ export default async function HomePage() {
           ) : null}
         </div>
       </section>
-
-      {/* ═══════════════════ التصنيفات ═══════════════════
-          بطاقات بأيقونات مباشرة تحت الواجهة: القسم هو أول قرار يتخذه
-          الزائر، ودفنه أسفل الصفحة يجعله يمرّر بحثًا عمّا يريد. الشبكة
-          عمودان على الهاتف — لمسة واحدة تكفي، بلا تمرير أفقي يخفي نصفها. */}
-      {visibleCategories.length > 0 ? (
-        <section className="container-page py-14 sm:py-16">
-          <SectionHeading
-            title="تصفّح المجموعات"
-            subtitle="اختر ما يناسب ذوقك ومناسبتك"
-            align="center"
-          />
-
-          <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {visibleCategories.map((category) => (
-              <Link
-                key={category.id}
-                href={`/category/${category.slug}`}
-                className="surface-card group flex flex-col items-center gap-3 p-5 text-center transition-all duration-300 ease-[var(--ease-luxe)] hover:border-[var(--accent)] hover:shadow-[var(--shadow-lift)]"
-              >
-                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--surface-sunken)] text-[var(--accent)] transition-transform duration-300 group-hover:scale-110">
-                  <CategoryIcon icon={category.icon} size={22} />
-                </span>
-
-                <span className="text-sm font-semibold leading-snug">
-                  {category.name}
-                </span>
-
-                {/* القسم الفارغ يقول «قريبًا» لا «٠ عطور»: الصفر يقرأ
-                    كعطب، و«قريبًا» يقرأ كوعد — والوجهة واحدة. */}
-                <span className="tabular text-xs text-[var(--text-muted)]">
-                  {category.productCount === 0
-                    ? 'قريبًا'
-                    : `${category.productCount} ${category.productCount === 1 ? 'عطر' : 'عطور'}`}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
-      ) : null}
 
       {/* ═══════════════════ تقييم المتجر ═══════════════════
           مجمَّع من تقييمات المنتجات المعتمدة — لا رقم مستقل. بلا تقييمات

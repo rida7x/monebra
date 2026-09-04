@@ -8,10 +8,11 @@
 
 @theme {
   /* ── الخطوط ── */
-  --font-sans: var(--font-plex-arabic), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-cormorant), var(--font-plex-arabic), serif;
-  /* لشريط وعد المطابقة — لا يُحمَّل إلا في صفحات الأقسام */
-  --font-cairo: var(--font-cairo-src), var(--font-plex-arabic), sans-serif;
+  /* Cairo خط المتجر كله. `--font-cairo` يبقى اسمًا مستقلًا للأماكن التي
+     تطلبه صراحةً (شريط وعد المطابقة)، وقيمته نفس `--font-sans`. */
+  --font-sans: var(--font-cairo-src), ui-sans-serif, system-ui, sans-serif;
+  --font-cairo: var(--font-sans);
+  --font-display: var(--font-cormorant), var(--font-cairo-src), serif;
 
   /* ── الألوان الأساسية ── */
   --color-ink-950: #08080a;
