@@ -12,6 +12,7 @@ import { ProductGrid } from '@/components/product/ProductCard';
 import { ProductFilters } from '@/components/product/ProductFilters';
 import { Pagination } from '@/components/product/Pagination';
 import { SectionHeading } from '@/components/ui/primitives';
+import { BrandPromise } from '@/components/ui/BrandPromise';
 import { Suspense } from 'react';
 
 export const metadata: Metadata = {
@@ -74,6 +75,8 @@ export default async function SearchPage({ searchParams }: PageProps) {
 
   return (
     <main className="container-page py-10 sm:py-14">
+      <BrandPromise text={settings.categoryPromise} className="mb-9" />
+
       <header className="mb-8">
         <h1 className="text-2xl font-semibold sm:text-3xl">
           {query ? (

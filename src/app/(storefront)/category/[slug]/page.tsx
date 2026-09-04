@@ -12,7 +12,7 @@ import {
 } from '@/lib/services/product-query';
 import { ProductGrid } from '@/components/product/ProductCard';
 import { ProductFilters } from '@/components/product/ProductFilters';
-import { CategoryPromise } from '@/components/product/CategoryPromise';
+import { BrandPromise } from '@/components/ui/BrandPromise';
 import { Pagination } from '@/components/product/Pagination';
 import { EmptyState } from '@/components/ui/primitives';
 
@@ -111,7 +111,7 @@ export default async function CategoryPage({
     <main className="container-page py-10 sm:py-14">
       {/* وعد المطابقة — نصّه في الإعدادات لا في الكود، فتركه فارغًا يُخفيه.
           الرقم دعاية يتغيّر، وبقاؤه بيد صاحب المتجر شرط لا رفاهية. */}
-      <CategoryPromise text={settings.categoryPromise} />
+      <BrandPromise text={settings.categoryPromise} className="mb-9" />
 
       <header className="mb-8">
         <h1 className="text-3xl font-semibold sm:text-4xl">{category.name}</h1>

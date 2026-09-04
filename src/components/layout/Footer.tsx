@@ -10,6 +10,7 @@ import type { StoreSettings } from '@/lib/settings';
 import { whatsappLink } from '@/lib/settings';
 import { formatPhone } from '@/lib/utils';
 import { BrandLogo } from '@/components/layout/BrandLogo';
+import { BrandPromise } from '@/components/ui/BrandPromise';
 
 /**
  * تذييل الموقع — Server Component، بلا JavaScript.
@@ -171,8 +172,15 @@ export function Footer({
           </FooterColumn>
         </div>
 
+        {/* وعد المتجر — هنا يصل كل صفحة في الموقع بلا استثناء، لأن التذييل
+            مشترك. الصيغة البارزة أعلى صفحات التصفّح، وهذه تذكير هادئ. */}
+        <BrandPromise
+          text={settings.categoryPromise}
+          className="mt-12 border-t border-[var(--surface-border)] pt-8"
+        />
+
         {/* ── إخلاء المسؤولية ── */}
-        <div className="mt-12 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-base)] p-5">
+        <div className="mt-10 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-base)] p-5">
           <p className="text-xs leading-relaxed text-[var(--text-muted)]">
             {settings.inspiredDisclaimer}
           </p>

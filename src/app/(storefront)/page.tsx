@@ -16,6 +16,7 @@ import { ProductGrid } from '@/components/product/ProductCard';
 import { SectionHeading } from '@/components/ui/primitives';
 import { CategoryIcon } from '@/components/ui/CategoryIcon';
 import { BrandLogo } from '@/components/layout/BrandLogo';
+import { BrandPromise } from '@/components/ui/BrandPromise';
 
 /**
  * تُبنى الصفحة مسبقًا وتُحدَّث كل دقيقتين — أسرع بكثير على الشبكات الضعيفة
@@ -127,6 +128,8 @@ export default async function HomePage() {
               {hero?.subtitle ?? settings.storeTagline}
             </p>
           ) : null}
+
+          <BrandPromise text={settings.categoryPromise} className="mt-7" />
 
           {/* ── الأقسام ──
               هنا لا أسفل الصفحة: القسم أول قرار يتخذه الزائر، ووضعه خلف

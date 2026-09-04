@@ -17,6 +17,7 @@ import { ProductGrid } from '@/components/product/ProductCard';
 import { ProductReviews } from '@/components/product/ProductReviews';
 import { ProductViewTracker } from '@/components/analytics/ProductViewTracker';
 import { Badge, SectionHeading, IntensityBar } from '@/components/ui/primitives';
+import { BrandPromise } from '@/components/ui/BrandPromise';
 import {
   GENDER_LABELS,
   SEASON_LABELS,
@@ -270,6 +271,14 @@ export default async function ProductPage({ params }: PageProps) {
             variants={product.variants}
             currency={currency}
             whatsappHref={whatsappLink(settings.whatsappNumber)}
+          />
+
+          {/* تحت زر الشراء لا فوقه: هنا لحظة التردّد، والوعد يُقرأ طمأنة
+              لا عنوانًا. الصيغة المضغوطة كي لا يزاحم السعر والأزرار. */}
+          <BrandPromise
+            text={settings.categoryPromise}
+            variant="inline"
+            className="mt-5"
           />
 
           {/* ── الباقة ── */}

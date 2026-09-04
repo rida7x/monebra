@@ -8,6 +8,7 @@ import {
   getFilterOptions,
 } from '@/lib/services/product-query';
 import { ProductGrid } from '@/components/product/ProductCard';
+import { BrandPromise } from '@/components/ui/BrandPromise';
 import { ProductFilters } from '@/components/product/ProductFilters';
 import { Pagination } from '@/components/product/Pagination';
 import { EmptyState } from '@/components/ui/primitives';
@@ -65,6 +66,8 @@ export default async function ProductsPage({ searchParams }: PageProps) {
 
   return (
     <main className="container-page py-10 sm:py-14">
+      <BrandPromise text={settings.categoryPromise} className="mb-9" />
+
       <header className="mb-8">
         <h1 className="text-3xl font-semibold sm:text-4xl">كل العطور</h1>
         <div className="mt-4 h-px w-16 rule-gold" />
